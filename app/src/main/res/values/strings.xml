@@ -30,4 +30,124 @@
     <string name="error_radio">Bluetooth or Wi-Fi is off or busy. Turn them on and try again.</string>
     <string name="error_nearby_busy">Another app is using Nearby right now. Close it and try again.</string>
     <string name="error_nearby">Nearby connection error: %1$s</string>
+
+    <!-- Common -->
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="not_now">Not now</string>
+    <string name="continue_action">Continue</string>
+    <string name="retry">Retry</string>
+    <string name="settings">Settings</string>
+    <string name="unknown_artist">Unknown artist</string>
+
+    <!-- Home -->
+    <string name="home_tagline">Play the same song on every phone, perfectly in sync.</string>
+    <string name="home_host">Host a group</string>
+    <string name="home_host_hint">Pick the music. Other phones join you.</string>
+    <string name="home_join">Join a group</string>
+    <string name="home_join_hint">Listen along with a nearby host.</string>
+    <string name="home_device_name">This phone appears as %1$s</string>
+
+    <!-- Permissions -->
+    <string name="permission_title">Allow nearby devices</string>
+    <string name="permission_rationale">SongSync connects phones directly over Bluetooth and Wi-Fi, which needs the Nearby devices permission. It never collects your location.</string>
+    <string name="permission_rationale_legacy">SongSync connects phones directly over Bluetooth and Wi-Fi. On this Android version that permission is grouped under Location. It never collects your location.</string>
+    <string name="permission_blocked">The permission was turned off for SongSync. Allow it in the app settings to connect phones.</string>
+    <string name="permission_open_settings">Open settings</string>
+    <string name="location_off_title">Turn on Location</string>
+    <string name="location_off_text">On this Android version, phones can only find each other while Location is switched on.</string>
+
+    <!-- Join -->
+    <string name="join_title">Join a group</string>
+    <string name="join_searching">Looking for groups nearby…</string>
+    <string name="join_hint">Ask the host to tap “Host a group”. Keep Bluetooth and Wi-Fi on.</string>
+    <string name="join_connecting">Connecting to %1$s…</string>
+    <string name="join_tap">Tap to join</string>
+
+    <!-- Host -->
+    <string name="host_title">Your group</string>
+    <string name="search_hint">Search songs</string>
+    <string name="search_clear">Clear search</string>
+    <string name="source_jiosaavn">JioSaavn</string>
+    <string name="source_youtube">YouTube</string>
+    <string name="search_empty">Search for a song to start the party</string>
+    <string name="search_no_results">No songs found</string>
+    <string name="search_failed">Search failed. Check your internet connection.</string>
+    <string name="add_to_queue">Add to queue</string>
+    <string name="added_to_queue">Added “%1$s” to the queue</string>
+    <string name="menu_more">More options</string>
+    <string name="menu_sync_test">Play sync test</string>
+    <string name="menu_lock_group">Lock group</string>
+    <string name="menu_end_group">End group</string>
+    <string name="leave_host_title">End the group?</string>
+    <string name="leave_host_text">The music stops on every phone.</string>
+    <string name="leave_client_title">Leave the group?</string>
+    <string name="leave_client_text">The others keep listening.</string>
+    <string name="end">End</string>
+
+    <!-- Player -->
+    <string name="player_now_playing">Now playing</string>
+    <string name="player_collapse">Collapse player</string>
+    <string name="player_loading">Loading “%1$s”…</string>
+    <string name="player_waiting_host">Waiting for %1$s to pick a song…</string>
+    <string name="player_up_next">Up next</string>
+    <string name="player_remove">Remove from queue</string>
+    <string name="hold_pause_here">Pause on this phone</string>
+    <string name="hold_rejoin">Rejoin the music</string>
+    <string name="hold_explainer">Paused on this phone. The group keeps playing.</string>
+    <string name="calibration_title">Echo calibration</string>
+    <string name="calibration_subtitle">If this phone sounds early or late, nudge it until the echo disappears. Saved for %1$s.</string>
+    <string name="calibration_value">%1$+d ms</string>
+    <string name="calibration_reset">Reset</string>
+    <string name="route_speaker">the phone speaker</string>
+    <string name="route_wired">wired headphones</string>
+    <string name="route_usb">USB audio</string>
+    <string name="sync_locked">In sync</string>
+    <string name="sync_syncing">Syncing…</string>
+    <string name="sync_waiting">Getting the track…</string>
+    <string name="sync_buffering">Buffering…</string>
+    <string name="sync_paused">Paused</string>
+    <string name="sync_hold">Paused on this phone</string>
+    <string name="sync_interrupted">Interrupted by another app</string>
+    <string name="sync_error_ms">±%1$d ms</string>
+
+    <!-- Devices -->
+    <string name="devices_title">Phones in the group</string>
+    <string name="devices_this_phone">%1$s (this phone)</string>
+    <string name="devices_alone">No other phones yet. They can join from “Join a group”.</string>
+    <string name="devices_lock_hint">New phones can\'t join. Phones already in the group can still reconnect.</string>
+    <string name="peer_ready">Ready</string>
+    <string name="peer_loading">Loading</string>
+    <string name="peer_failed">Can\'t play this song</string>
+    <string name="peer_hold">Paused</string>
+    <string name="peer_rtt">%1$d ms link</string>
+
+    <!-- Client -->
+    <string name="client_title">Listening with %1$s</string>
+    <string name="client_reconnecting">Reconnecting to %1$s…</string>
+
+    <!-- Settings -->
+    <string name="settings_device_name">Device name</string>
+    <string name="settings_device_name_hint">Shown to the other phones</string>
+    <string name="settings_quality">JioSaavn streaming quality</string>
+    <string name="settings_quality_hint">Chosen by the host; every phone streams the same file.</string>
+    <string name="quality_kbps">%1$d kbps</string>
+    <string name="settings_reset_latency">Reset learned latency</string>
+    <string name="settings_reset_latency_hint">Forget what SongSync learned about this phone\'s speaker and headphones.</string>
+    <string name="settings_reset_done">Learned latency cleared</string>
+    <string name="settings_diagnostics">Sync diagnostics</string>
+    <string name="settings_diagnostics_hint">Show clock offset, link round-trip time and sync error in the player.</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_license">Free software under the GNU GPL v3. Based on SongSync by SirEthic (MIT licence). YouTube support by NewPipe Extractor.</string>
+
+    <!-- Diagnostics -->
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_phase">State</string>
+    <string name="diag_error">Sync error</string>
+    <string name="diag_speed">Speed</string>
+    <string name="diag_offset">Clock offset</string>
+    <string name="diag_rtt">Round trip (min / median)</string>
+    <string name="diag_start_latency">Learned start latency</string>
+    <string name="diag_resyncs">Hard resyncs</string>
 </resources>

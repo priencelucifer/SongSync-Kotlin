@@ -1,8 +1,10 @@
 package com.songsync.app.playback
 
+import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -22,6 +24,7 @@ interface MediaControls {
  * Auto). Commands are routed to the group logic instead of the local ExoPlayer: on the host,
  * "pause" pauses everyone; on a client it only pauses this phone.
  */
+@OptIn(UnstableApi::class)
 class SessionPlayer(player: Player, private val controls: MediaControls) : ForwardingSimpleBasePlayer(player) {
 
     /** Call when [controls] changed so the session re-reads the state. */
@@ -57,6 +60,7 @@ class SessionPlayer(player: Player, private val controls: MediaControls) : Forwa
         when (seekCommand) {
             Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> controls.skipNext()
             Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM -> controls.seekTo(positionMs)
+            else -> Unit // previous/back/forward are not offered
         }
         return Futures.immediateVoidFuture()
     }

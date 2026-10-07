@@ -10,10 +10,12 @@ import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.IBinder
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaStyleNotificationHelper
 import coil3.SingletonImageLoader
@@ -44,6 +46,7 @@ data class NotificationContent(
  * It stays in the foreground for the whole session, even while paused, because a paused
  * client still has to hear the host's next "play".
  */
+@OptIn(UnstableApi::class)
 class SyncPlaybackService : Service() {
 
     private val scope = MainScope()
@@ -100,7 +103,8 @@ class SyncPlaybackService : Service() {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, types)
         } catch (_: SecurityException) {
             // connectedDevice needs a granted Bluetooth/Wi-Fi permission on Android 14+.
-            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            val mediaOnly = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, mediaOnly)
         }
     }
 

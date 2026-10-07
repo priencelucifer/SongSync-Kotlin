@@ -1,6 +1,7 @@
 package com.songsync.app.playback
 
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -8,6 +9,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -30,6 +32,7 @@ import okhttp3.OkHttpClient
  * The app's single ExoPlayer, adapted to what the sync engine needs. Lives for the whole
  * process and must only be touched from the main thread.
  */
+@OptIn(UnstableApi::class)
 class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
 
     val player: ExoPlayer

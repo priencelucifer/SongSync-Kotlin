@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- targetSdk 36 is deliberate: it meets Google Play's requirement (Aug 2026) and Android 17
+         behaviour changes have not been tested on devices yet. Revisit when bumping. -->
+    <issue id="OldTargetApi" severity="ignore" />
+</lint>

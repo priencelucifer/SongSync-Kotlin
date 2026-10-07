@@ -57,7 +57,7 @@ class AudioRouteMonitor(context: Context) {
     private companion object {
         val BLUETOOTH = buildSet {
             add(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
-            add(AudioDeviceInfo.TYPE_HEARING_AID)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) add(AudioDeviceInfo.TYPE_HEARING_AID)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(AudioDeviceInfo.TYPE_BLE_HEADSET)
                 add(AudioDeviceInfo.TYPE_BLE_SPEAKER)

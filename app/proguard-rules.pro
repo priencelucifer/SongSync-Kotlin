@@ -7,3 +7,8 @@
 -dontwarn java.beans.**
 -dontwarn javax.script.**
 -dontwarn org.jspecify.annotations.**
+# Rhino's bytecode optimizer targets desktop JVMs; Android runs it in interpreted mode.
+-dontwarn jdk.dynalink.**
+
+# NewPipeExtractor parses some YouTube responses with protobuf-lite (fields read reflectively).
+-keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
