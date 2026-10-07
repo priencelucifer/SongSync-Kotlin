@@ -52,7 +52,7 @@ class SettingsStore(context: Context) {
     /** Forget everything learned about every audio output (e.g. after a system update). */
     suspend fun resetLatencies() = store.edit { prefs ->
         prefs.asMap().keys
-            .filter { it.name.startsWith(START_PREFIX) || it.name.startsWith(CALIBRATION_PREFIX) }
+            .filter { it.name.startsWith(LEGACY_START_PREFIX) || it.name.startsWith(CALIBRATION_PREFIX) }
             .forEach { prefs.remove(it) }
     }
 
@@ -61,7 +61,9 @@ class SettingsStore(context: Context) {
 
     companion object {
         const val MAX_NAME_LENGTH = 24
-        private const val START_PREFIX = "start_latency:"
+        // v2: values learned by 2.0.0-2.0.2 could be skewed by a re-sync loop, so start fresh.
+        private const val START_PREFIX = "start_latency_v2:"
+        private const val LEGACY_START_PREFIX = "start_latency"
         private const val CALIBRATION_PREFIX = "calibration:"
         private val DEVICE_NAME = stringPreferencesKey("device_name")
         private val MAX_BITRATE = intPreferencesKey("max_bitrate_kbps")

@@ -54,10 +54,10 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
         val app = context.applicationContext
         val http = OkHttpDataSource.Factory(okHttp.newBuilder().addInterceptor(YouTubeStreamInterceptor()).build())
             .setUserAgent(NewPipeDownloader.USER_AGENT)
+        // Speed nudges go through ExoPlayer's standard in-app time stretching (as used by every
+        // podcast player). Applying them at the audio output instead re-configures the platform
+        // AudioTrack on each change, which glitches audibly on some phones.
         val renderers = DefaultRenderersFactory(app)
-            // Speed nudges are applied by the audio output directly: immediate, no flush, and
-            // ExoPlayer keeps reporting the true position while they are active.
-            .setEnableAudioOutputPlaybackParameters(true)
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(30_000, 120_000, 1_000, 2_000)
             .build()
@@ -108,6 +108,7 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
     override val isInterrupted: Boolean
         get() = player.playWhenReady && player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE
     override val positionMs: Long get() = player.currentPosition
+    override val bufferedPositionMs: Long get() = player.bufferedPosition
     override val speed: Float get() = player.playbackParameters.speed
 
     override fun play() = player.play()

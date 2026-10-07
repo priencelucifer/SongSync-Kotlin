@@ -9,6 +9,7 @@ class DriftControllerTest {
     private val config = SyncConfig()
 
     private fun controllerWith(vararg errors: Double) = DriftController(config).apply { errors.forEach(::addSample) }
+    private fun DriftController.decide() = decide(nowNs = 0)
 
     @Test
     fun `waits for enough samples`() {
@@ -27,18 +28,24 @@ class DriftControllerTest {
         val behind = controllerWith(*DoubleArray(10) { -30.0 }).decide() as Decision.Speed
         assertThat(ahead.speed).isLessThan(1f)
         assertThat(behind.speed).isGreaterThan(1f)
-        assertThat(ahead.speed).isWithin(1e-4f).of(1f - (30.0 / config.correctionHorizonMs).toFloat())
+        assertThat(ahead.speed).isWithin(config.speedStep).of(1f - (30.0 / config.correctionHorizonMs).toFloat())
     }
 
     @Test
-    fun `speed nudges are clamped`() {
+    fun `speed nudges are clamped and quantised`() {
         val d = controllerWith(*DoubleArray(10) { 110.0 }).decide() as Decision.Speed
         assertThat(d.speed).isEqualTo(1f - config.maxSpeedNudge)
+        val small = controllerWith(*DoubleArray(10) { 5.5 }).decide() as Decision.Speed
+        assertThat(small.speed).isEqualTo(1f - config.speedStep) // never rounded to "no change"
     }
 
     @Test
-    fun `large errors ask for a hard resync`() {
-        assertThat(controllerWith(*DoubleArray(10) { 500.0 }).decide()).isEqualTo(Decision.HardResync)
+    fun `only a sustained large error asks for a re-sync`() {
+        val c = controllerWith(*DoubleArray(10) { 500.0 })
+        val first = c.decide(nowNs = 0)
+        assertThat(first).isEqualTo(Decision.Speed(1f - config.maxSpeedNudge)) // not yet: could be a bad reading
+        val later = c.decide(nowNs = config.hardResyncSustainMs * NANOS_PER_MS)
+        assertThat(later).isEqualTo(Decision.HardResync(Decision.Speed(1f - config.maxSpeedNudge)))
     }
 
     @Test

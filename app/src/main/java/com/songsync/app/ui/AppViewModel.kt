@@ -41,6 +41,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val peers = session.peers
     val onHold = session.onHold
     val stats = session.stats
+    val syncLog = session.syncLog
     val messages = session.messages
     val calibration = graph.latency.calibration
     val audioRoute = graph.audioRoute

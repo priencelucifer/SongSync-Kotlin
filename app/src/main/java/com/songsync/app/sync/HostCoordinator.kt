@@ -55,6 +55,8 @@ class HostCoordinator(
         val readyTrackKey: String? = null,
         val failedTrackKey: String? = null,
         val status: ClientStatus? = null,
+        /** Nearby BandwidthInfo.Quality (1 low/Bluetooth .. 3 high), if reported. */
+        val linkQuality: Int? = null,
     )
 
     sealed interface Event {
@@ -85,6 +87,7 @@ class HostCoordinator(
     var acceptNewPeers = true
 
     private val knownPeerNames = HashSet<String>()
+    private val linkQualities = HashMap<String, Int>()
     private var seq = 0L
     private var loadJob: Job? = null
     private var endHandledSeq = -1L
@@ -198,7 +201,14 @@ class HostCoordinator(
     private fun onEvent(event: TransportEvent) {
         when (event) {
             is TransportEvent.Received -> ProtocolCodec.decode(event.bytes)?.let { handle(event.endpointId, it, event.receivedAtNs) }
-            is TransportEvent.Disconnected -> _peers.update { it - event.endpointId }
+            is TransportEvent.Disconnected -> {
+                linkQualities -= event.endpointId
+                _peers.update { it - event.endpointId }
+            }
+            is TransportEvent.BandwidthChanged -> {
+                linkQualities[event.endpointId] = event.quality
+                updatePeer(event.endpointId) { it.copy(linkQuality = event.quality) }
+            }
             else -> Unit // peers are only added once they introduce themselves with Hello
         }
     }
@@ -240,7 +250,7 @@ class HostCoordinator(
             return
         }
         knownPeerNames += hello.deviceName
-        _peers.update { it + (endpointId to Peer(endpointId, hello.deviceName)) }
+        _peers.update { it + (endpointId to Peer(endpointId, hello.deviceName, linkQuality = linkQualities[endpointId])) }
         link.send(endpointId, Welcome(PROTOCOL_VERSION, hostName, sessionId, _track.value, _state.value))
     }
 

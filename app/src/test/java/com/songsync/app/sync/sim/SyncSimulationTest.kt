@@ -27,10 +27,18 @@ class SyncSimulationTest {
     private val config = SyncConfig()
     private val track = Track(TrackSource.CLICK_TEST, "sim", "Simulated", "Test", durationMs = 600_000)
 
-    private class Group(val scope: TestScope, seed: Int, clientCount: Int, val config: SyncConfig) {
+    private class Group(
+        val scope: TestScope,
+        seed: Int,
+        clientCount: Int,
+        val config: SyncConfig,
+        latency: LatencyModel = LatencyModel(),
+        private val glitchMs: Double = 0.0,
+        private val glitchDurationMs: Long = 800,
+    ) {
         val random = Random(seed)
-        val network = FakeNetwork(scope, random, LatencyModel())
-        val hostPhone = SimPhone("host", scope, network, random, config)
+        val network = FakeNetwork(scope, random, latency)
+        val hostPhone = SimPhone("host", scope, network, random, config, startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs)
         val host = HostCoordinator(scope.backgroundScope, hostPhone.endpoint, hostPhone.clock, hostPhone.local, "Host", "session")
         val clients = mutableListOf<Pair<SimPhone, ClientCoordinator>>()
 
@@ -39,8 +47,9 @@ class SyncSimulationTest {
             repeat(clientCount) { addClient("client${it + 1}") }
         }
 
-        fun addClient(name: String): Pair<SimPhone, ClientCoordinator> {
-            val phone = SimPhone(name, scope, network, random, config)
+        fun addClient(name: String, downloadRateX: Double = Double.POSITIVE_INFINITY): Pair<SimPhone, ClientCoordinator> {
+            val phone = SimPhone(name, scope, network, random, config, startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs)
+            phone.player.downloadRateX = downloadRateX
             val client = ClientCoordinator(scope.backgroundScope, phone.endpoint, phone.clock, phone.local, name, "test")
             network.connect("host", name)
             client.attach("host")
@@ -104,7 +113,7 @@ class SyncSimulationTest {
         for (seed in 1..6) runTest {
             val group = Group(this, seed, clientCount = 3, config)
             startPlaying(group)
-            advanceTimeBy(6_000) // start + first corrections
+            advanceTimeBy(15_000) // first-ever start (latency not learned yet) + convergence
             val worst = worstErrorOver(group, 90_000)
             println("seed=$seed worst error over 90 s: ${"%.2f".format(worst)} ms; start latency learned=" +
                 group.phones.joinToString { "%.0f/%d".format(it.latency.startLatencyMs, it.player.startLatencyMs) })
@@ -119,13 +128,17 @@ class SyncSimulationTest {
         startPlaying(group)
         advanceTimeBy(10_000)
         // Each start teaches the phone its start latency (persisted per audio output in the app).
-        // After three, the very first audible sample of a resume is already on time.
+        // After a few, the very first audible sample of a resume is already on time.
         repeat(3) {
             group.host.pause()
             advanceTimeBy(3_000)
             group.host.play()
-            advanceTimeBy(1_500) // lead time + start, before closed-loop corrections matter
+            advanceTimeBy(4_000) // long enough for the start to settle and be learned from
         }
+        group.host.pause()
+        advanceTimeBy(3_000)
+        group.host.play()
+        advanceTimeBy(1_500) // lead time + start, before closed-loop corrections act
         val worst = group.errorsMs().maxOf { abs(it) }
         println("error ~1 s after resume: ${group.errorsMs().joinToString { "%.1f".format(it) }}; latency learned/true: " +
             group.phones.joinToString { "%.1f/%d".format(it.latency.startLatencyMs, it.player.startLatencyMs) } +
@@ -162,7 +175,7 @@ class SyncSimulationTest {
         startPlaying(group)
         advanceTimeBy(20_000)
         val (late, _) = group.addClient("late")
-        advanceTimeBy(8_000)
+        advanceTimeBy(15_000) // load, first (unlearned) start, convergence
         assertThat(late.player.loadedTrackKey).isEqualTo(track.key)
         assertThat(worstErrorOver(group, 20_000, listOf(late))).isAtMost(5.0)
     }
@@ -186,8 +199,63 @@ class SyncSimulationTest {
         advanceTimeBy(3_000)
         assertThat(phone.player.isPlaying).isFalse()
         group.host.play()
-        advanceTimeBy(5_000)
+        advanceTimeBy(10_000)
         assertThat(worstErrorOver(group, 10_000)).isAtMost(5.0)
+    }
+
+    @Test
+    fun `a wrong position right after each start does not cause a re-sync loop`() = runTest {
+        // Some phones report a position 100+ ms off until AudioTrack timestamps settle.
+        val group = Group(this, seed = 31, clientCount = 3, config, glitchMs = 180.0, glitchDurationMs = 2_500)
+        startPlaying(group)
+        advanceTimeBy(60_000)
+        group.phones.forEach {
+            assertThat(it.follower.status.hardResyncs).isAtMost(1)
+            assertThat(it.follower.phase).isEqualTo(FollowerPhase.LOCKED)
+        }
+        assertThat(worstErrorOver(group, 30_000)).isAtMost(5.0)
+    }
+
+    @Test
+    fun `a network outage on one phone recovers without chasing the timeline`() {
+        for ((rate, recoverWithinMs) in listOf(5.0 to 10_000L, 1.5 to 25_000L)) runTest {
+            val group = Group(this, seed = 13, clientCount = 2, config)
+            startPlaying(group)
+            advanceTimeBy(12_000)
+            val (phone, _) = group.clients.first()
+            val seeksBefore = phone.player.seeks
+            phone.player.networkOutage(durationMs = 3_000, recoveryRateX = rate)
+            advanceTimeBy(recoverWithinMs)
+            assertThat(phone.player.isPlaying).isTrue()
+            assertThat(phone.player.seeks - seeksBefore).isAtMost(2) // no seek-stall-seek chase
+            advanceTimeBy(5_000)
+            assertThat(worstErrorOver(group, 10_000, listOf(phone))).isAtMost(5.0)
+            println("outage, recovery at ${rate}x: seeks=${phone.player.seeks - seeksBefore}")
+        }
+    }
+
+    @Test
+    fun `joining mid-song with a real download speed jumps ahead instead of waiting forever`() = runTest {
+        val group = Group(this, seed = 17, clientCount = 1, config)
+        startPlaying(group)
+        advanceTimeBy(90_000) // far past what a fresh download from 0 would reach quickly
+        val (late, _) = group.addClient("late", downloadRateX = 5.0)
+        advanceTimeBy(8_000)
+        assertThat(late.player.isPlaying).isTrue()
+        advanceTimeBy(10_000)
+        assertThat(worstErrorOver(group, 15_000, listOf(late))).isAtMost(5.0)
+    }
+
+    @Test
+    fun `a jittery Bluetooth-like link stays echo-free and never re-syncs`() = runTest {
+        val bluetooth = LatencyModel(baseMs = 30, jitterMeanMs = 25.0, spikeChance = 0.15, spikeMaxMs = 200)
+        val group = Group(this, seed = 19, clientCount = 3, config, latency = bluetooth)
+        startPlaying(group)
+        advanceTimeBy(12_000)
+        val worst = worstErrorOver(group, 90_000)
+        println("bluetooth-like link: worst error ${"%.1f".format(worst)} ms")
+        assertThat(worst).isAtMost(20.0)
+        group.phones.forEach { assertThat(it.follower.status.hardResyncs).isEqualTo(0) }
     }
 
     @Test

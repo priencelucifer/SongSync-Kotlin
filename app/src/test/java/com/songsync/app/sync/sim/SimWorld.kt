@@ -51,13 +51,20 @@ class VirtualScheduler(private val scope: CoroutineScope, private val clock: Dev
     }
 }
 
-/** Models ExoPlayer + AudioTrack closely enough for sync purposes. */
+/**
+ * Models ExoPlayer + AudioTrack closely enough for sync purposes, including the awkward parts:
+ * start latency, audio-clock drift, noisy position reports, a reported position that is wrong
+ * for a moment after each start, and (optionally) a finite download speed with network outages.
+ */
 class SimulatedPlayer(
     private val trueMs: () -> Long,
     val startLatencyMs: Long,
     audioPpm: Double,
     private val seekReadyMs: Long,
     private val noiseMs: () -> Double,
+    /** Reported-position error right after audio starts, decaying to 0 over [glitchDurationMs]. */
+    private val startGlitchMs: Double = 0.0,
+    private val glitchDurationMs: Long = 800,
 ) : SyncPlayer {
     private val audioRate = 1.0 + audioPpm / 1e6
     var durationMs = 600_000L
@@ -71,37 +78,94 @@ class SimulatedPlayer(
     private var readyAtMs = Long.MAX_VALUE
     private var basePos = 0.0
     private var audibleFromMs = 0L
+    /** When audio last (re)started from a pause/seek/stall; the start glitch is relative to it. */
+    private var glitchFromMs = 0L
     var plays = 0
         private set
     var seeks = 0
         private set
+
+    /** Download speed in multiples of real time; infinite = everything is always buffered. */
+    var downloadRateX = Double.POSITIVE_INFINITY
+    private var bufStartPos = 0.0
+    private var bufStartTimeMs = 0L
+    private var waitingForData = false
+    private var neededAheadMs = 0L
 
     fun load(key: String) {
         loadedTrackKey = key
         readyAtMs = trueMs()
         basePos = 0.0
         playWhenReady = false
+        bufStartPos = 0.0
+        bufStartTimeMs = trueMs() - 2_000 // prepare() buffered a couple of seconds
+        waitingForData = false
     }
 
-    override val isReady get() = loadedTrackKey != null && trueMs() >= readyAtMs
+    /** No data at all for [durationMs], then data arrives at [recoveryRateX] x real time. */
+    fun networkOutage(durationMs: Long, recoveryRateX: Double) {
+        basePos = truePositionMs()
+        waitingForData = true
+        neededAheadMs = 2_000 // ExoPlayer's rebuffer threshold in PlayerEngine
+        bufStartPos = basePos
+        bufStartTimeMs = trueMs() + durationMs
+        downloadRateX = recoveryRateX
+    }
+
+    private fun buffered(): Double =
+        if (downloadRateX.isInfinite()) Double.MAX_VALUE
+        else minOf(durationMs.toDouble(), bufStartPos + downloadRateX * maxOf(0L, trueMs() - bufStartTimeMs))
+
+    private fun checkData() {
+        if (waitingForData && buffered() - basePos >= neededAheadMs) {
+            waitingForData = false
+            if (playWhenReady) {
+                audibleFromMs = trueMs() + startLatencyMs
+                glitchFromMs = audibleFromMs
+            }
+        }
+    }
+
+    override val bufferedPositionMs: Long
+        get() = if (downloadRateX.isInfinite()) Long.MAX_VALUE / 4 else buffered().toLong()
+
+    override val isReady: Boolean
+        get() {
+            checkData()
+            return loadedTrackKey != null && trueMs() >= readyAtMs && !waitingForData
+        }
     override val isPlaying get() = playWhenReady && isReady
 
     /** What a listener actually hears (no reporting noise). */
     fun truePositionMs(): Double {
-        if (!playWhenReady) return basePos
+        checkData()
+        if (!playWhenReady || waitingForData) return basePos
         val now = trueMs()
         return if (now <= audibleFromMs) basePos
-        else min(durationMs.toDouble(), basePos + (now - audibleFromMs) * speed * audioRate)
+        else minOf(durationMs.toDouble(), basePos + (now - audibleFromMs) * speed * audioRate)
     }
 
     override val positionMs: Long
-        get() = if (isPlaying) (truePositionMs() + noiseMs()).roundToLong() else truePositionMs().roundToLong()
+        get() {
+            val heard = truePositionMs()
+            if (!isPlaying) return heard.roundToLong()
+            val sinceStart = trueMs() - glitchFromMs
+            val glitch = if (startGlitchMs != 0.0 && sinceStart < glitchDurationMs) {
+                startGlitchMs * (1.0 - maxOf(0L, sinceStart).toDouble() / glitchDurationMs)
+            } else {
+                0.0
+            }
+            return (heard + glitch + noiseMs()).roundToLong()
+        }
 
     override fun play() {
         if (playWhenReady) return
         playWhenReady = true
         plays++
-        audibleFromMs = max(trueMs(), readyAtMs) + startLatencyMs
+        if (!waitingForData) {
+            audibleFromMs = max(trueMs(), readyAtMs) + startLatencyMs
+            glitchFromMs = audibleFromMs
+        }
     }
 
     override fun pause() {
@@ -113,8 +177,19 @@ class SimulatedPlayer(
     override fun seekTo(positionMs: Long) {
         seeks++
         basePos = positionMs.toDouble()
-        readyAtMs = trueMs() + seekReadyMs
-        if (playWhenReady) audibleFromMs = readyAtMs + startLatencyMs
+        if (!downloadRateX.isInfinite() && (basePos < bufStartPos || basePos > buffered())) {
+            // Outside the buffer: a new range request (time to first byte), then download.
+            bufStartPos = basePos
+            bufStartTimeMs = trueMs() + TTFB_MS
+            waitingForData = true
+            neededAheadMs = 1_000
+        } else {
+            readyAtMs = trueMs() + seekReadyMs
+        }
+        if (playWhenReady && !waitingForData) {
+            audibleFromMs = readyAtMs + startLatencyMs
+            glitchFromMs = audibleFromMs
+        }
     }
 
     override fun setSpeed(speed: Float) {
@@ -124,6 +199,10 @@ class SimulatedPlayer(
             audibleFromMs = now
         }
         this.speed = speed
+    }
+
+    private companion object {
+        const val TTFB_MS = 300L
     }
 }
 
@@ -210,12 +289,17 @@ class SimPhone(
     startLatencyMs: Long = random.nextLong(40, 150),
     audioPpm: Double = random.nextDouble(-30.0, 30.0),
     loadDelayMs: Long = random.nextLong(300, 2_500),
+    startGlitchMs: Double = 0.0,
+    glitchDurationMs: Long = 800,
 ) {
     private val trueMs = { scope.testScheduler.currentTime }
     val clock = DeviceClock(trueMs, clockOffsetMs * 1_000_000, clockPpm)
-    val player = SimulatedPlayer(trueMs, startLatencyMs, audioPpm, seekReadyMs = random.nextLong(20, 80)) {
-        random.nextDouble(-1.5, 1.5)
-    }
+    val player = SimulatedPlayer(
+        trueMs, startLatencyMs, audioPpm, seekReadyMs = random.nextLong(20, 80),
+        noiseMs = { random.nextDouble(-1.5, 1.5) },
+        startGlitchMs = startGlitchMs,
+        glitchDurationMs = glitchDurationMs,
+    )
     val latency = InMemoryLatencyProfile()
     val follower = PlaybackFollower(player, clock, VirtualScheduler(scope.backgroundScope, clock), config, latency)
     val local = SimLocalPlayback(player, follower, loadDelayMs)

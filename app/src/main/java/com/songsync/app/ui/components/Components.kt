@@ -236,7 +236,17 @@ fun CalibrationControl(valueMs: Double, route: AudioRoute, onChange: (Double) ->
 }
 
 @Composable
-fun DiagnosticsPanel(stats: SyncStats, modifier: Modifier = Modifier) {
+fun linkLabel(quality: Int?): String = stringResource(
+    when (quality) {
+        1 -> R.string.link_low
+        2 -> R.string.link_medium
+        3 -> R.string.link_high
+        else -> R.string.link_unknown
+    },
+)
+
+@Composable
+fun DiagnosticsPanel(stats: SyncStats, log: List<String>, modifier: Modifier = Modifier) {
     val f = stats.follower
     Column(
         modifier
@@ -261,6 +271,17 @@ fun DiagnosticsPanel(stats: SyncStats, modifier: Modifier = Modifier) {
         )
         DiagnosticRow(R.string.diag_start_latency, "%.1f ms".format(f.startLatencyMs))
         DiagnosticRow(R.string.diag_resyncs, f.hardResyncs.toString())
+        DiagnosticRow(R.string.diag_link, linkLabel(stats.linkQuality))
+        if (log.isNotEmpty()) {
+            Text(
+                stringResource(R.string.diag_log),
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            log.forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
+        }
     }
 }
 

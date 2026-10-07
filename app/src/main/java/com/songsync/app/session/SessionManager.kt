@@ -29,6 +29,7 @@ import com.songsync.app.sync.MonotonicClock
 import com.songsync.app.sync.NANOS_PER_MS
 import com.songsync.app.sync.PlaybackFollower
 import com.songsync.app.sync.Scheduler
+import com.songsync.app.sync.SyncEvent
 import com.songsync.app.sync.SyncConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -77,6 +78,8 @@ data class PeerUi(
     val state: PeerState,
     val syncErrorMs: Int?,
     val rttMs: Int?,
+    /** Nearby link quality (1 low/Bluetooth .. 3 high), if known. */
+    val linkQuality: Int? = null,
 )
 
 /** Numbers for the diagnostics panel. */
@@ -85,6 +88,7 @@ data class SyncStats(
     val medianRttMs: Double?,
     val minRttMs: Double?,
     val clockSamples: Int,
+    val linkQuality: Int? = null,
 )
 
 /**
@@ -138,6 +142,11 @@ class SessionManager(
     private val _stats = MutableStateFlow(SyncStats(follower.status, null, null, 0))
     val stats: StateFlow<SyncStats> = _stats.asStateFlow()
 
+    private val _syncLog = MutableStateFlow<List<String>>(emptyList())
+    /** Recent sync events, newest first, for the diagnostics panel. */
+    val syncLog: StateFlow<List<String>> = _syncLog.asStateFlow()
+    private val logTime = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
+
     private var sessionJob: Job? = null
     private var discoveryJob: Job? = null
     private var reconnectJob: Job? = null
@@ -148,6 +157,7 @@ class SessionManager(
 
     init {
         engine.onStateChanged = { follower.onPlayerChanged() }
+        follower.onEvent = { event -> log(describe(event)) }
         scope.launch { routes.route.collect { latency.switchTo(it) } }
         scope.launch {
             onHold.collect { hold ->
@@ -204,6 +214,7 @@ class SessionManager(
                         },
                         syncErrorMs = p.status?.syncErrorMs,
                         rttMs = p.status?.rttMs,
+                        linkQuality = p.linkQuality,
                     )
                 }
             }
@@ -349,6 +360,7 @@ class SessionManager(
         sessionJob = null
         follower.reset()
         engine.unload()
+        _syncLog.value = emptyList()
         _localHold.value = false
         engine.clearSystemHold()
         SyncPlaybackService.stop(context)
@@ -421,6 +433,7 @@ class SessionManager(
                         medianRttMs = estimate?.let { it.medianRttNs.toDouble() / NANOS_PER_MS },
                         minRttMs = estimate?.let { it.minRttNs.toDouble() / NANOS_PER_MS },
                         clockSamples = estimate?.samples ?: 0,
+                        linkQuality = _client.value?.linkQuality?.value,
                     )
                     delay(STATS_INTERVAL_MS)
                 }
@@ -462,6 +475,7 @@ class SessionManager(
     }
 
     private fun onTransportEvent(event: TransportEvent) {
+        if (event is TransportEvent.BandwidthChanged) log("link quality ${event.quality} (1 = Bluetooth, 3 = fast Wi-Fi)")
         when (val state = _state.value) {
             is State.Connecting -> when {
                 event is TransportEvent.Connected && event.endpointId == state.host.endpointId -> onJoined(state.host)
@@ -540,6 +554,21 @@ class SessionManager(
         startDiscovery()
     }
 
+    private fun log(line: String) {
+        _syncLog.value = (listOf("${logTime.format(java.util.Date())}  $line") + _syncLog.value).take(MAX_LOG_LINES)
+    }
+
+    private fun describe(event: SyncEvent): String = when (event.type) {
+        SyncEvent.Type.START -> "start (latency %.0f ms)".format(event.value)
+        SyncEvent.Type.START_ERROR -> "start error %+.1f ms".format(event.value)
+        SyncEvent.Type.HARD_RESYNC -> "re-sync (error %+.0f ms)".format(event.value)
+        SyncEvent.Type.REBUFFER -> "stalled: waiting for data"
+        SyncEvent.Type.CATCHING_UP -> "waiting for download to get ahead"
+        SyncEvent.Type.SPEED -> "speed %.4f".format(event.value)
+        SyncEvent.Type.OFFSET_JUMP -> "clock offset jump %+.0f ms".format(event.value)
+        SyncEvent.Type.INTERRUPTED -> "interrupted by another app"
+    }
+
     private fun report(@StringRes text: Int, vararg args: Any) {
         _messages.tryEmit(UserMessage(text, *args))
     }
@@ -581,6 +610,7 @@ class SessionManager(
 
     private companion object {
         const val BYE_FLUSH_MS = 300L
+        const val MAX_LOG_LINES = 12
         const val STATS_INTERVAL_MS = 500L
         const val RECONNECT_TIMEOUT_MS = 60_000L
         const val CONNECT_ATTEMPT_TIMEOUT_MS = 10_000L

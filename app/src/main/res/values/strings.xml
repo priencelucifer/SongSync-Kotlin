@@ -152,4 +152,10 @@
     <string name="diag_rtt">Round trip (min / median)</string>
     <string name="diag_start_latency">Learned start latency</string>
     <string name="diag_resyncs">Hard resyncs</string>
+    <string name="diag_link">Link</string>
+    <string name="diag_log">Recent events</string>
+    <string name="link_low">Bluetooth link</string>
+    <string name="link_medium">Wi-Fi link</string>
+    <string name="link_high">Fast Wi-Fi link</string>
+    <string name="link_unknown">Link type not reported yet</string>
 </resources>

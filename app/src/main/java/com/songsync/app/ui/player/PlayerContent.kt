@@ -190,13 +190,14 @@ private fun SyncPanel(vm: AppViewModel) {
     val calibration by vm.calibration.collectAsStateWithLifecycle()
     val route by vm.audioRoute.collectAsStateWithLifecycle()
     val diagnostics by vm.diagnostics.collectAsStateWithLifecycle()
+    val log by vm.syncLog.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         SyncStatusChip(stats)
         Spacer(Modifier.height(8.dp))
         CalibrationControl(calibration, route, vm::setCalibration, Modifier.fillMaxWidth())
         if (diagnostics) {
             Spacer(Modifier.height(12.dp))
-            Box(Modifier.fillMaxWidth()) { DiagnosticsPanel(stats) }
+            Box(Modifier.fillMaxWidth()) { DiagnosticsPanel(stats, log) }
         }
     }
 }

@@ -73,6 +73,10 @@ class ClientCoordinator(
     private val _state = MutableStateFlow(PlaybackState.Idle)
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
+    /** Nearby link quality to the host (BandwidthInfo.Quality: 1 low/Bluetooth .. 3 high), if reported. */
+    private val _linkQuality = MutableStateFlow<Int?>(null)
+    val linkQuality: StateFlow<Int?> = _linkQuality.asStateFlow()
+
     private val _loadStatus = MutableStateFlow<LoadStatus>(LoadStatus.Idle)
     val loadStatus: StateFlow<LoadStatus> = _loadStatus.asStateFlow()
 
@@ -137,7 +141,10 @@ class ClientCoordinator(
     private fun onEvent(event: TransportEvent) {
         when (event) {
             is TransportEvent.Received -> ProtocolCodec.decode(event.bytes)?.let { handle(it, event.receivedAtNs) }
-            is TransportEvent.BandwidthChanged -> scope.launch { timeSyncBurst() }
+            is TransportEvent.BandwidthChanged -> {
+                _linkQuality.value = event.quality
+                scope.launch { timeSyncBurst() }
+            }
             else -> Unit
         }
     }

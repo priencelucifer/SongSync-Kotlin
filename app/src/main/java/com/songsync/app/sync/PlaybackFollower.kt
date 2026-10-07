@@ -2,6 +2,7 @@ package com.songsync.app.sync
 
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 /** The follower's view of the local audio player. Implemented over ExoPlayer on Android. */
 interface SyncPlayer {
@@ -15,6 +16,8 @@ interface SyncPlayer {
     val isInterrupted: Boolean
     /** Position of the audio currently being heard. */
     val positionMs: Long
+    /** How far media has been downloaded (track position). */
+    val bufferedPositionMs: Long
     val speed: Float
     fun play()
     fun pause()
@@ -52,13 +55,35 @@ data class FollowerStatus(
     val hardResyncs: Int,
 )
 
+/** Notable things the follower did, for the diagnostics log. */
+data class SyncEvent(val atNs: Long, val type: Type, val value: Double = 0.0) {
+    enum class Type {
+        /** Scheduled start; value = start latency used (ms). */
+        START,
+        /** First settled measurement after a start; value = error (ms). */
+        START_ERROR,
+        /** value = error that triggered it (ms). */
+        HARD_RESYNC,
+        /** Playback stalled waiting for data. */
+        REBUFFER,
+        /** Waiting for the download to get ahead of the timeline before restarting. */
+        CATCHING_UP,
+        /** value = new speed. */
+        SPEED,
+        /** value = jump (ms). */
+        OFFSET_JUMP,
+        INTERRUPTED,
+    }
+}
+
 /**
  * Keeps the local player on the shared [PlaybackState] timeline.
  *
  * Starts, resumes and re-syncs are all scheduled for a moment slightly in the future:
  * the player is paused, pre-positioned, and `play()` is issued early by the learned start
  * latency so that audio emerges exactly on time. Once playing, the position is compared with
- * the timeline every tick and small drifts are corrected with speed nudges ([DriftController]).
+ * the timeline every tick and drift is corrected with small, infrequent speed nudges
+ * ([DriftController]). Re-syncs (which pause briefly) are a last resort with back-off.
  *
  * Not thread-safe: call everything from the player's thread.
  */
@@ -74,6 +99,9 @@ class PlaybackFollower(
     var phase: FollowerPhase = FollowerPhase.IDLE
         private set
 
+    /** Receives [SyncEvent]s; optional. */
+    var onEvent: ((SyncEvent) -> Unit)? = null
+
     private var offsetTargetNs: Long? = null
     private var appliedOffsetNs = 0L
     private var hold = false
@@ -83,10 +111,16 @@ class PlaybackFollower(
     private var deferredEvaluation: Cancellable? = null
     private var armedSeq = NONE
     private var settleUntilNs = 0L
-    private val settleSamples = ArrayList<Double>(SETTLE_SAMPLES)
+    private val settleSamples = ArrayList<Double>()
     private var learnFromStart = false
     private var lastErrorMs: Double? = null
     private var hardResyncs = 0
+
+    private var lastStartNs = 0L
+    private var lastSpeedChangeNs = Long.MIN_VALUE / 2
+    private var consecutiveResyncs = 0
+    private var nextResyncAllowedNs = 0L
+    private var calmSinceNs: Long? = null
 
     val status: FollowerStatus
         get() = FollowerStatus(
@@ -105,13 +139,15 @@ class PlaybackFollower(
         if (offsetNs == appliedOffsetNs && !first) return
         val audible = phase == FollowerPhase.LOCKED || phase == FollowerPhase.SETTLING ||
             phase == FollowerPhase.PAUSE_PENDING
-        val bigJump = abs(offsetNs - appliedOffsetNs) > config.offsetSlewThresholdMs * NANOS_PER_MS
+        val jump = offsetNs - appliedOffsetNs
+        val bigJump = abs(jump) > config.offsetSlewThresholdMs * NANOS_PER_MS
         if (first || bigJump || !audible) {
+            if (!first && audible) emit(SyncEvent.Type.OFFSET_JUMP, jump.toDouble() / NANOS_PER_MS)
             appliedOffsetNs = offsetNs
             armedSeq = NONE // any scheduled instant was computed with the old offset
             evaluate()
         }
-        // While audio is playing, small changes are slewed in by tick() so nothing jumps.
+        // While audio is playing, smaller changes are slewed in by tick() so nothing jumps.
     }
 
     fun updateState(newState: PlaybackState) {
@@ -163,6 +199,9 @@ class PlaybackFollower(
         appliedOffsetNs = 0
         lastErrorMs = null
         hardResyncs = 0
+        consecutiveResyncs = 0
+        nextResyncAllowedNs = 0
+        calmSinceNs = null
     }
 
     // --- decisions ---------------------------------------------------------------------------
@@ -176,6 +215,7 @@ class PlaybackFollower(
             hold -> stopAll(FollowerPhase.ON_HOLD)
             player.isInterrupted -> {
                 // The system silenced us; touching the player would fight the audio-focus logic.
+                if (phase != FollowerPhase.INTERRUPTED) emit(SyncEvent.Type.INTERRUPTED)
                 cancelScheduled()
                 drift.reset()
                 phase = FollowerPhase.INTERRUPTED
@@ -221,6 +261,7 @@ class PlaybackFollower(
                 if (player.isPlaying) return // the closed loop in measure() owns it
                 if (!player.isReady) {
                     // Rebuffering: stop ExoPlayer from resuming at a stale position on its own.
+                    emit(SyncEvent.Type.REBUFFER)
                     player.pause()
                     resetSpeed()
                     drift.reset()
@@ -256,7 +297,32 @@ class PlaybackFollower(
             audibleAtHost += -target * NANOS_PER_MS
             target = 0
         }
-        if (abs(player.positionMs - target) > config.positionToleranceMs) player.seekTo(target)
+
+        val position = player.positionMs
+        val buffered = player.bufferedPositionMs
+        when {
+            target < position && position - target <= config.maxWaitAheadMs -> {
+                // Ahead of the timeline: seeking back would throw the buffer away. Wait for the
+                // timeline to reach this position and start from here instead.
+                audibleAtHost += (position - target) * NANOS_PER_MS
+                target = position
+            }
+            target > position && target + config.startHeadroomMs > buffered -> {
+                // The audio at the target is not downloaded yet; seeking there would stall again
+                // and chase the moving timeline forever.
+                if (phase != FollowerPhase.BUFFERING) emit(SyncEvent.Type.CATCHING_UP)
+                armedSeq = NONE
+                phase = FollowerPhase.BUFFERING
+                if (target - buffered > config.catchUpWindowMs) {
+                    // Too far for the download to catch up from here (e.g. joining mid-song):
+                    // jump a little past the timeline and let it arrive (handled by the branch above).
+                    player.seekTo(s.positionAt(hostNowNs + config.leapLeadMs * NANOS_PER_MS) + latency.calibrationMs.toLong())
+                }
+                // Otherwise stay paused: the download continues and the next tick starts once it is ahead.
+                return
+            }
+        }
+        if (abs(position - target) > config.positionToleranceMs) player.seekTo(target)
 
         armedSeq = s.seq
         phase = FollowerPhase.ARMED
@@ -275,8 +341,10 @@ class PlaybackFollower(
         }
         // Only a start from exactly the prepared position says anything about start latency.
         learnFromStart = abs(player.positionMs - target) <= config.positionToleranceMs
+        emit(SyncEvent.Type.START, latency.startLatencyMs)
         player.play()
-        settleUntilNs = clock.nowNs() + config.settleMs * NANOS_PER_MS
+        lastStartNs = clock.nowNs()
+        settleUntilNs = lastStartNs + config.settleMs * NANOS_PER_MS
         settleSamples.clear()
         phase = FollowerPhase.SETTLING
     }
@@ -294,23 +362,30 @@ class PlaybackFollower(
 
         if (phase == FollowerPhase.SETTLING) {
             settleSamples += error
-            if (settleSamples.size < SETTLE_SAMPLES) return
-            val startError = settleSamples.sorted()[SETTLE_SAMPLES / 2]
+            if (settleSamples.size < config.settleSamples) return
+            val startError = settleSamples.sorted()[settleSamples.size / 2]
             if (learnFromStart) learnStartLatency(startError)
             learnFromStart = false
             lastErrorMs = startError
+            emit(SyncEvent.Type.START_ERROR, startError)
             drift.reset()
             phase = FollowerPhase.LOCKED
-            if (abs(startError) > config.hardResyncMs) hardResync()
             return
         }
 
         drift.addSample(error)
-        lastErrorMs = drift.medianErrorMs()
-        when (val decision = drift.decide()) {
+        val median = drift.medianErrorMs()
+        lastErrorMs = median
+        trackCalm(median, nowLocal)
+        when (val decision = drift.decide(nowLocal)) {
             DriftController.Decision.Wait -> Unit
             is DriftController.Decision.Speed -> applySpeed(decision.speed)
-            DriftController.Decision.HardResync -> hardResync()
+            is DriftController.Decision.HardResync ->
+                if (nowLocal >= nextResyncAllowedNs && nowLocal - lastStartNs >= config.minLockBeforeResyncMs * NANOS_PER_MS) {
+                    hardResync(median ?: 0.0, nowLocal)
+                } else {
+                    applySpeed(decision.fallback.speed) // shrink the gap meanwhile
+                }
         }
     }
 
@@ -321,9 +396,23 @@ class PlaybackFollower(
         latency.startLatencyMs = (latency.startLatencyMs - step).coerceIn(0.0, config.maxLearnedLatencyMs)
     }
 
-    private fun hardResync() {
+    private fun hardResync(errorMs: Double, nowNs: Long) {
         hardResyncs++
+        consecutiveResyncs++
+        val backoff = min(config.resyncBackoffMaxMs, config.resyncBackoffBaseMs shl (consecutiveResyncs - 1).coerceAtMost(10))
+        nextResyncAllowedNs = nowNs + backoff * NANOS_PER_MS
+        calmSinceNs = null
+        emit(SyncEvent.Type.HARD_RESYNC, errorMs)
         arm(state)
+    }
+
+    private fun trackCalm(median: Double?, nowNs: Long) {
+        if (median != null && abs(median) <= config.deadbandMs) {
+            val since = calmSinceNs ?: nowNs.also { calmSinceNs = it }
+            if (nowNs - since >= config.resyncCalmResetMs * NANOS_PER_MS) consecutiveResyncs = 0
+        } else {
+            calmSinceNs = null
+        }
     }
 
     // --- helpers -----------------------------------------------------------------------------
@@ -343,15 +432,21 @@ class PlaybackFollower(
         phase = newPhase
     }
 
+    /** Speed changes are rationed: each one can cost a tiny glitch on some audio paths. */
     private fun applySpeed(speed: Float) {
-        val current = player.speed
-        if (abs(speed - current) >= config.minSpeedStep || (speed == 1f && current != 1f)) {
-            player.setSpeed(speed)
-        }
+        if (abs(speed - player.speed) < config.speedStep / 2) return
+        val now = clock.nowNs()
+        if (now - lastSpeedChangeNs < config.minSpeedDwellMs * NANOS_PER_MS) return
+        player.setSpeed(speed)
+        lastSpeedChangeNs = now
+        emit(SyncEvent.Type.SPEED, speed.toDouble())
     }
 
     private fun resetSpeed() {
-        if (player.speed != 1f) player.setSpeed(1f)
+        if (player.speed != 1f) {
+            player.setSpeed(1f)
+            lastSpeedChangeNs = clock.nowNs()
+        }
     }
 
     private fun cancelScheduled() {
@@ -359,11 +454,14 @@ class PlaybackFollower(
         scheduled = null
     }
 
+    private fun emit(type: SyncEvent.Type, value: Double = 0.0) {
+        onEvent?.invoke(SyncEvent(clock.nowNs(), type, value))
+    }
+
     private fun hostNow() = clock.nowNs() + appliedOffsetNs
     private fun localTimeOf(hostNs: Long) = hostNs - appliedOffsetNs
 
     private companion object {
         const val NONE = -1L
-        const val SETTLE_SAMPLES = 3
     }
 }

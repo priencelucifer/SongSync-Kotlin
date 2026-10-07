@@ -72,6 +72,7 @@ import com.songsync.app.ui.AppViewModel
 import com.songsync.app.ui.components.TrackArtwork
 import com.songsync.app.ui.components.TrackRow
 import com.songsync.app.ui.components.artistOrUnknown
+import com.songsync.app.ui.components.linkLabel
 import com.songsync.app.ui.components.rememberPlaybackPosition
 import com.songsync.app.ui.player.PlayerContent
 import com.songsync.app.ui.theme.SyncColors
@@ -365,7 +366,11 @@ private fun PeerRow(peer: PeerUi) {
         PeerState.FAILED -> stringResource(R.string.peer_failed) to SyncColors.bad
         PeerState.ON_HOLD -> stringResource(R.string.peer_hold) to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val details = listOfNotNull(stateText, peer.rttMs?.let { stringResource(R.string.peer_rtt, it) }).joinToString(" · ")
+    val details = listOfNotNull(
+        stateText,
+        peer.rttMs?.let { stringResource(R.string.peer_rtt, it) },
+        peer.linkQuality?.let { linkLabel(it) },
+    ).joinToString(" · ")
     ListItem(
         headlineContent = { Text(if (peer.isSelf) stringResource(R.string.devices_this_phone, peer.name) else peer.name) },
         supportingContent = { Text(details) },
