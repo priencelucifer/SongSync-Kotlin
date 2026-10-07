@@ -40,6 +40,7 @@ class ProtocolTest {
             CalibrationPlan(track.key, slot = 2),
             CalibrationResult(correctionMs = -12.5),
             CalibrationResult(correctionMs = null),
+            CalibrationReset,
             Bye,
         )
         messages.forEach { assertThat(ProtocolCodec.decode(ProtocolCodec.encode(it))).isEqualTo(it) }

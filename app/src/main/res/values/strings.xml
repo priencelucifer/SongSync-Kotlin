@@ -116,7 +116,7 @@
     <!-- Automatic echo calibration -->
     <string name="ok">OK</string>
     <string name="calibrate_button">Auto-calibrate echo</string>
-    <string name="calibrate_hint">Each phone chirps in turn while this phone listens, then every phone is corrected automatically. Put all phones close to this one (within about 30 cm) or all at the same distance from it: sound takes 3 ms per metre, which would be measured too.</string>
+    <string name="calibrate_hint">Each phone chirps in turn while this phone listens, twice, and a phone is corrected only when both measurements agree. Put all phones close to this one (within about 30 cm) or all at the same distance from it: sound takes 3 ms per metre, which would be measured too.</string>
     <string name="calibration_distance_warning">Big differences between phones can also come from distance (3 ms per metre). If the phones were not all close to this one, or at the same distance, calibrate again that way.</string>
     <string name="calibration_running_title">Calibrating echo…</string>
     <string name="calibration_stage_starting">Getting every phone ready…</string>
@@ -138,6 +138,11 @@
     <string name="calibration_not_heard_here">The host couldn\'t hear this phone during calibration. Turn up its volume and try again.</string>
     <string name="calibration_current">Echo correction for %1$s: %2$+d ms</string>
     <string name="calibration_busy">Calibrating, one moment…</string>
+    <string name="calibration_outcome_unsteady">%1$s: two measurements disagreed (%2$+d ms, then %3$+d ms), so nothing was changed. Keep the room quiet and the phones still, then try again.</string>
+    <string name="calibration_failed_changed">A phone joined, left or paused during calibration. Try again.</string>
+    <string name="calibration_reset_everywhere_button">Reset echo calibration (all phones)</string>
+    <string name="calibration_reset_everywhere">Echo calibration reset on every phone. They now play uncorrected.</string>
+    <string name="calibration_reset_by_host">The host reset echo calibration. This phone now plays uncorrected.</string>
     <string name="sync_check_button">Check sync</string>
     <string name="sync_report_button">Run full sync test</string>
     <string name="sync_report_title">Sync report</string>

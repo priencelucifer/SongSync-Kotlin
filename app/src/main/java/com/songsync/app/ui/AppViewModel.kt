@@ -141,12 +141,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (granted) session.autoCalibrate(measureOnly)
     }
 
-    /** Starts the automatic sync test (check, calibrate, check x3, report) if the mic is granted. */
+    /** Starts the automatic sync test (three checks, then the report) if the mic is granted. */
     fun runSyncReport() {
         val granted = ContextCompat.checkSelfPermission(getApplication(), Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         if (granted) session.runSyncReport()
     }
+
+    fun resetCalibrationEverywhere() = session.resetCalibrationEverywhere()
 
     fun cancelCalibration() = session.cancelCalibration()
     fun dismissCalibration() = session.dismissCalibration()

@@ -76,6 +76,12 @@ class RouteLatencyProfile(
         saveJob = null
     }
 
+    /** Echo correction back to 0 for every output. A pending save then stores 0 too. */
+    suspend fun resetCalibrations() {
+        _calibration.value = 0.0
+        settings.resetCalibrations()
+    }
+
     private fun scheduleSave() {
         val key = routeKey
         saveJob?.cancel()

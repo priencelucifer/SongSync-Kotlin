@@ -31,11 +31,9 @@ class SyncReportTest {
             ),
         )
         val passes = listOf(
-            pass("before", "Host" to 0.0, "Bedroom" to 6.0, "Kitchen" to -3.0),
-            pass("calib", "Host" to -1.0, "Bedroom" to 5.0, "Kitchen" to -4.0),
-            pass("after1", "Host" to 0.0, "Bedroom" to 1.0, "Kitchen" to -0.4),
-            pass("after2", "Host" to 0.0, "Bedroom" to 1.4, "Kitchen" to -0.2),
-            ReportPass("after3", emptyList(), failure = "Couldn't hear the chirps"),
+            pass("check1", "Host" to 0.0, "Bedroom" to 1.0, "Kitchen" to -0.4),
+            pass("check2", "Host" to 0.0, "Bedroom" to 1.4, "Kitchen" to -0.2),
+            ReportPass("check3", emptyList(), failure = "Couldn't hear the chirps"),
         )
         val tracks = listOf(
             TrackFormats("YOUTUBE:abc", "Believer", mapOf("Host" to aac, "Bedroom" to aac, "Kitchen" to aac.copy(itag = 251, mime = "audio/opus"))),
@@ -45,8 +43,8 @@ class SyncReportTest {
         val text = SyncReport.build("SongSync sync report", "Host", phones, passes, "UNPROCESSED, timestamped", tracks)
         println(text)
 
-        assertThat(text).contains("before Host +0.0 · Bedroom +6.0 · Kitchen -3.0 | 9.0")
-        assertThat(text).contains("after3 failed: Couldn't hear the chirps")
+        assertThat(text).contains("check1 Host +0.0 · Bedroom +1.0 · Kitchen -0.4 | 1.4")
+        assertThat(text).contains("check3 failed: Couldn't hear the chirps")
         assertThat(text).contains("RESULT spread avg 1.5 max 1.6 ms -> excellent; repeat ±0.2")
         assertThat(text).contains("mic UNPROCESSED, timestamped")
         assertThat(text).contains("Bedroom · Google Pixel 8 A35 v2.3.0 · SPEAKER · wifi low latency · Wi-Fi rtt 3/8/14 · clk ±0.31 +12ppm")
@@ -63,8 +61,22 @@ class SyncReportTest {
     }
 
     @Test
-    fun `no verdict without a successful after-calibration check`() {
-        assertThat(SyncReport.verdict(listOf(pass("before", "Host" to 0.0, "B" to 3.0)))).isNull()
-        assertThat(SyncReport.verdict(listOf(pass("after1", "Host" to 0.0, "B" to 12.0)))).contains("audible echo")
+    fun `no verdict without a successful check`() {
+        assertThat(SyncReport.verdict(listOf(ReportPass("check1", emptyList(), failure = "x")))).isNull()
+        assertThat(SyncReport.verdict(listOf(pass("check1", "Host" to 0.0, "B" to 12.0)))).contains("audible echo")
+    }
+
+    @Test
+    fun `a large saved correction on a speaker is called out, a Bluetooth one is not`() {
+        val phones = listOf(
+            ReportPhone("Host", isHost = true, diag = diag().copy(calibrationMs = 120.0)),
+            ReportPhone("Earbuds", isHost = false, diag = diag("BLUETOOTH Buds").copy(calibrationMs = 180.0)),
+            ReportPhone("Fine", isHost = false, diag = diag().copy(calibrationMs = -6.0)),
+        )
+        val text = SyncReport.build("r", "Host", phones, emptyList(), null, emptyList())
+
+        assertThat(text).contains("! Host plays +120 ms shifted by a saved echo correction")
+        assertThat(text).doesNotContain("Earbuds plays +")
+        assertThat(text).doesNotContain("Fine plays")
     }
 }

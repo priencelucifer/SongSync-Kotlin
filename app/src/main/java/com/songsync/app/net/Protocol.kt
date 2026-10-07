@@ -153,6 +153,11 @@ data class CalibrationPlan(val trackKey: String, val slot: Int) : Message
 @SerialName("calibrated")
 data class CalibrationResult(val correctionMs: Double?) : Message
 
+/** Host -> clients: forget every saved echo correction and play uncorrected. */
+@Serializable
+@SerialName("calib-reset")
+data object CalibrationReset : Message
+
 /** Either direction: leaving on purpose (so the other side does not try to reconnect). */
 @Serializable
 @SerialName("bye")

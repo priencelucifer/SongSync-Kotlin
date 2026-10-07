@@ -56,6 +56,11 @@ class SettingsStore(context: Context) {
             .forEach { prefs.remove(it) }
     }
 
+    /** Forget the echo correction of every audio output, keeping the learned start latencies. */
+    suspend fun resetCalibrations() = store.edit { prefs ->
+        prefs.asMap().keys.filter { it.name.startsWith(LEGACY_CALIBRATION_PREFIX) }.forEach { prefs.remove(it) }
+    }
+
     private fun startKey(route: String) = doublePreferencesKey("$START_PREFIX$route")
     private fun calibrationKey(route: String) = doublePreferencesKey("$CALIBRATION_PREFIX$route")
 

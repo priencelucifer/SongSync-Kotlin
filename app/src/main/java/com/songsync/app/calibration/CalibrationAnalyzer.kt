@@ -2,6 +2,7 @@ package com.songsync.app.calibration
 
 import com.songsync.app.sync.NANOS_PER_MS
 import com.songsync.app.sync.PlaybackState
+import kotlin.math.abs
 
 /**
  * A microphone recording with the local (host) monotonic time of its first sample. [source] and
@@ -53,6 +54,25 @@ object CalibrationAnalyzer {
             val host = phones.firstOrNull { it.slot == 0 }?.lateMs ?: return emptyMap()
             return phones.associate { it.slot to it.lateMs?.minus(host) }
         }
+    }
+
+    /** Two calibration measurements of one phone must agree this closely (ms) to be applied. */
+    const val AGREEMENT_MS = 4.0
+
+    /**
+     * Combines the corrections of two runs: phones measured in both, within [toleranceMs], get
+     * the average (first map); phones measured in both but further apart get both values (second
+     * map) and no correction. Phones heard in only one run are in neither.
+     */
+    fun agree(
+        first: Map<Int, Double>,
+        second: Map<Int, Double>,
+        toleranceMs: Double = AGREEMENT_MS,
+    ): Pair<Map<Int, Double>, Map<Int, Pair<Double, Double>>> {
+        val both = first.keys.intersect(second.keys).sorted()
+        val (steady, unsteady) = both.partition { abs(first.getValue(it) - second.getValue(it)) <= toleranceMs }
+        return steady.associateWith { (first.getValue(it) + second.getValue(it)) / 2 } to
+            unsteady.associateWith { first.getValue(it) to second.getValue(it) }
     }
 
     private const val MIN_SNR = 6.0

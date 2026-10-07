@@ -3,6 +3,7 @@ package com.songsync.app.session
 import com.songsync.app.net.AudioFormatInfo
 import com.songsync.app.net.DeviceDiag
 import java.util.Locale
+import kotlin.math.abs
 
 /** One phone as it appears in the sync report. */
 data class ReportPhone(
@@ -72,9 +73,9 @@ object SyncReport {
         }
     }.trimEnd()
 
-    /** Summary over the measure-only passes after calibration (labels starting with "after"). */
+    /** Summary over the successful sync checks (labels starting with "check"). */
     internal fun verdict(passes: List<ReportPass>): String? {
-        val after = passes.filter { it.label.startsWith("after") && it.failure == null }
+        val after = passes.filter { it.label.startsWith("check") && it.failure == null }
         val spreads = after.mapNotNull { it.spread }
         if (spreads.isEmpty()) return null
         val worst = spreads.max()
@@ -84,7 +85,7 @@ object SyncReport {
             worst <= 10.0 -> "acceptable"
             else -> "audible echo"
         }
-        // Repeatability: how much each phone's own number moved between the after-passes.
+        // Repeatability: how much each phone's own number moved between the checks.
         val byPhone = after.flatMap { it.outcomes }.filter { it.correctionMs != null }.groupBy { it.name }
         val repeat = byPhone.values.filter { it.size >= 2 }.maxOfOrNull { list ->
             val v = list.map { it.correctionMs!! }
@@ -140,6 +141,12 @@ object SyncReport {
             .forEach { w += "${it.name}'s link is slow at times (p90 ${it.rttP90Ms} ms); keep phones on one Wi-Fi, close to the router" }
         phones.filter { it.diag != null && it.diag.wifiLock?.startsWith("low") != true && it.diag.wifiLock?.startsWith("high") != true }
             .forEach { w += "${it.name}: Wi-Fi lock ${it.diag?.wifiLock ?: "not held"} (power save can add 100 ms delays)" }
+        phones.forEach { p ->
+            val d = p.diag ?: return@forEach
+            if (!d.route.startsWith("BLUETOOTH") && abs(d.calibrationMs) > LARGE_WIRED_CALIBRATION_MS) {
+                w += "${p.name} plays %+.0f ms shifted by a saved echo correction; if songs sound off, use Reset echo calibration (all phones)".fmt(d.calibrationMs)
+            }
+        }
         phones.filter { it.diag?.route?.startsWith("BLUETOOTH") == true }
             .forEach { w += "${it.name} plays through Bluetooth: expect 100-300 ms extra, calibrate after connecting" }
         phones.filter { !it.isHost && it.linkQuality == 1 }
@@ -154,6 +161,7 @@ object SyncReport {
 
     private fun value(o: CalibrationOutcome): String = when {
         o.paused -> "paused"
+        o.unsteadyMs != null -> "unsteady"
         o.rejectedMs != null -> "rejected(%+.0f)".fmt(o.rejectedMs)
         o.correctionMs == null -> "n/h"
         else -> "%+.1f".fmt(o.correctionMs)
@@ -169,6 +177,8 @@ object SyncReport {
     private fun short(name: String) = name.take(10)
 
     private const val SLOW_LINK_P90_MS = 100
+    /** A built-in speaker or wired output rarely needs more correction than this. */
+    private const val LARGE_WIRED_CALIBRATION_MS = 40.0
 
     private fun String.fmt(vararg args: Any?) = String.format(Locale.US, this, *args)
 }

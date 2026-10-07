@@ -168,6 +168,14 @@ fun HostScreen(
                                 },
                             )
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.calibration_reset_everywhere_button)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_graphic_eq), contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    vm.resetCalibrationEverywhere()
+                                },
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.menu_lock_group)) },
                                 leadingIcon = { Icon(painterResource(R.drawable.ic_lock), contentDescription = null) },
                                 trailingIcon = { Checkbox(checked = locked, onCheckedChange = null) },

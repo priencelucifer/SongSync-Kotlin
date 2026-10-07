@@ -108,6 +108,12 @@ fun CalibrationDialog(state: CalibrationUi, onCancel: () -> Unit, onDismiss: () 
                         Text(
                             when {
                                 outcome.paused -> stringResource(R.string.calibration_outcome_paused, outcome.name)
+                                outcome.unsteadyMs != null -> stringResource(
+                                    R.string.calibration_outcome_unsteady,
+                                    outcome.name,
+                                    outcome.unsteadyMs.first.roundToInt(),
+                                    outcome.unsteadyMs.second.roundToInt(),
+                                )
                                 outcome.rejectedMs != null ->
                                     stringResource(R.string.calibration_outcome_rejected, outcome.name, outcome.rejectedMs.roundToInt())
                                 correction == null -> stringResource(R.string.calibration_outcome_missing, outcome.name)

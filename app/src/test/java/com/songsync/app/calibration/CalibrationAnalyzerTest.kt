@@ -72,6 +72,19 @@ class CalibrationAnalyzerTest {
     }
 
     @Test
+    fun `only corrections that two runs agree on are applied`() {
+        val first = mapOf(0 to 1.0, 1 to -8.0, 2 to 95.0, 3 to 4.0)
+        val second = mapOf(0 to 2.0, 1 to -5.0, 2 to -3.0)
+        val (agreed, unsteady) = CalibrationAnalyzer.agree(first, second)
+
+        assertThat(agreed).containsExactly(0, 1.5, 1, -6.5)
+        assertThat(unsteady).containsExactly(2, 95.0 to -3.0)
+        // Heard in one run only: neither applied nor reported as unsteady.
+        assertThat(agreed).doesNotContainKey(3)
+        assertThat(unsteady).doesNotContainKey(3)
+    }
+
+    @Test
     fun `a reflection louder than the direct sound does not fool it`() {
         val phones = listOf(Phone(0.0, 1.0), Phone(15.0, 0.3, reflectionMs = 2.0, reflectionGain = 1.3))
         val (recording, timeline) = record(phones, micDelayMs = 20.0)

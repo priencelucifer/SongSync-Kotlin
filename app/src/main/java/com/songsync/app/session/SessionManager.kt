@@ -8,6 +8,7 @@ import com.songsync.app.calibration.CalibrationAnalyzer
 import com.songsync.app.calibration.CalibrationSignal
 import com.songsync.app.calibration.MicRecorder
 import com.songsync.app.net.CalibrationPlan
+import com.songsync.app.net.CalibrationReset
 import com.songsync.app.net.CalibrationResult
 import androidx.annotation.StringRes
 import com.google.android.gms.common.api.ApiException
@@ -124,6 +125,7 @@ sealed interface CalibrationUi {
  * [correctionMs] is what was added to that phone's calibration, or null if it was not heard.
  * [paused] phones were on hold ("Pause here") and so were not measured. [rejectedMs] is a
  * measured correction too large to be real for that output, which was not applied.
+ * [unsteadyMs] are two measurements that disagreed, so nothing was applied.
  */
 data class CalibrationOutcome(
     val name: String,
@@ -131,9 +133,11 @@ data class CalibrationOutcome(
     val correctionMs: Double?,
     val paused: Boolean = false,
     val rejectedMs: Double? = null,
+    val unsteadyMs: Pair<Double, Double>? = null,
 ) {
     fun label(): String = when {
         paused -> "paused"
+        unsteadyMs != null -> "unsteady %+.0f/%+.0f ms".format(unsteadyMs.first, unsteadyMs.second)
         rejectedMs != null -> "rejected %+.0f ms".format(rejectedMs)
         correctionMs == null -> "not heard"
         else -> "%+.1f ms".format(correctionMs)
@@ -376,7 +380,7 @@ class SessionManager(
         calibrationJob = scope.launch {
             withSongRestored(host) {
                 _calibration.value = try {
-                    CalibrationUi.Done(calibrationPass(host, measureOnly).outcomes, measureOnly)
+                    if (measureOnly) CalibrationUi.Done(checkPass(host).outcomes, measureOnly = true) else CalibrationUi.Done(calibrate(host))
                 } catch (e: CalibrationFailure) {
                     CalibrationUi.Failed(e.reason)
                 }
@@ -385,23 +389,39 @@ class SessionManager(
     }
 
     /**
-     * The automatic sync test (host): one sync check, an echo calibration, then three more
-     * checks, followed by a one-screen report with every phone's device, clock, link, output and
-     * file details. Takes about a minute; the loaded song is put back afterwards.
+     * Host: every phone, this one included, drops its saved echo correction and plays
+     * uncorrected. The way back from a bad calibration, which every song would otherwise carry.
+     */
+    fun resetCalibrationEverywhere() {
+        val host = _host.value ?: return
+        if (blockedByCalibration()) return
+        scope.launch {
+            latency.resetCalibrations()
+            host.peers.value.keys.forEach { host.sendTo(it, CalibrationReset) }
+            log("echo calibration reset on every phone")
+            report(R.string.calibration_reset_everywhere)
+        }
+    }
+
+    /**
+     * The automatic sync test (host): three sync checks, followed by a one-screen report with
+     * every phone's device, clock, link, output, saved correction and file details. It only
+     * measures: a test never changes how the phones play (an echo calibration run inside it once
+     * left a bad correction on every song). The loaded song is put back afterwards.
      */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun runSyncReport() {
         val host = _host.value ?: return
         if (calibrating) return
         calibrationJob = scope.launch {
-            val plan = listOf("before" to true, "calib" to false, "after1" to true, "after2" to true, "after3" to true)
+            val plan = listOf("check1", "check2", "check3")
             val passes = mutableListOf<ReportPass>()
             var micNote: String? = null
             withSongRestored(host) {
-                plan.forEachIndexed { index, (label, measureOnly) ->
+                plan.forEachIndexed { index, label ->
                     if (index > 0) delay(REPORT_PASS_GAP_MS)
                     passes += try {
-                        val pass = calibrationPass(host, measureOnly, step = index + 1, steps = plan.size)
+                        val pass = checkPass(host, step = index + 1, steps = plan.size)
                         micNote = pass.micNote
                         ReportPass(label, pass.outcomes)
                     } catch (e: CalibrationFailure) {
@@ -461,16 +481,90 @@ class SessionManager(
     private class PassResult(val outcomes: List<CalibrationOutcome>, val micNote: String)
 
     /**
-     * One echo-calibration run (host). Every phone plays the calibration track in sync but is
-     * only audible during its own slot; this phone's microphone records the whole run and the
-     * measured lateness of each phone becomes its correction.
-     *
-     * With [measureOnly] ("Check sync") nothing is corrected: the outcomes are how late each phone
-     * is heard relative to this one, with the current calibration in effect. Leaves the
+     * One recorded calibration track. [analysis] is each phone's lateness with its own tracking
+     * error removed; slot 0 is this phone, slot i is `peers[i - 1]`.
+     */
+    private class Measurement(
+        val peers: List<HostCoordinator.Peer>,
+        val heldOutcomes: List<CalibrationOutcome>,
+        val raw: CalibrationAnalyzer.Result,
+        val analysis: CalibrationAnalyzer.Result,
+        val notHeard: List<String>,
+        val micNote: String,
+    )
+
+    /**
+     * "Check sync" (host): how late each phone is heard relative to this one, with the current
+     * calibration in effect. Changes nothing.
+     */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
+    private suspend fun checkPass(host: HostCoordinator, step: Int = 0, steps: Int = 0): PassResult {
+        val m = measure(host, step, steps)
+        val lateness = m.raw.latenessVsHost()
+        val outcomes = listOf(CalibrationOutcome(deviceName, isSelf = true, lateness[0])) +
+            m.peers.mapIndexed { index, peer -> CalibrationOutcome(peer.name, isSelf = false, lateness[index + 1]) } +
+            m.heldOutcomes
+        val heard = outcomes.mapNotNull { it.correctionMs }
+        if (heard.size < 2) throw CalibrationFailure(R.string.calibration_failed_nothing, m.notHeard)
+        log(
+            "sync check: " + outcomes.joinToString { o -> "${o.name} ${o.label()}" } +
+                "; spread %.1f ms".format(heard.max() - heard.min()),
+        )
+        return PassResult(outcomes, m.micNote)
+    }
+
+    /**
+     * Echo calibration (host): two measurements, and a phone is corrected only where both agree
+     * within [CalibrationAnalyzer.AGREEMENT_MS] (by their average). A single bad recording (noise,
+     * a phone that moved, a chirp taken for an echo) once saved a 100-300 ms correction that every
+     * song then played with; a phone whose two numbers differ keeps its calibration instead.
+     */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
+    private suspend fun calibrate(host: HostCoordinator): List<CalibrationOutcome> {
+        val first = measure(host, step = 1, steps = 2)
+        delay(REPORT_PASS_GAP_MS)
+        val second = measure(host, step = 2, steps = 2)
+        if (first.peers.map { it.endpointId } != second.peers.map { it.endpointId }) {
+            throw CalibrationFailure(R.string.calibration_failed_changed)
+        }
+        val (agreed, unsteady) = CalibrationAnalyzer.agree(
+            first.analysis.corrections(RouteLatencyProfile.MAX_CALIBRATION_MS),
+            second.analysis.corrections(RouteLatencyProfile.MAX_CALIBRATION_MS),
+        )
+        if (agreed.isEmpty() && unsteady.isEmpty()) {
+            throw CalibrationFailure(R.string.calibration_failed_nothing, (first.notHeard + second.notHeard).distinct())
+        }
+        val peers = second.peers
+        // Built-in speakers and wired outputs never hide 150+ ms; a correction that large means
+        // a bad measurement, and applying it would push the next measurement further off.
+        val routeOf = mapOf(0 to routes.route.value.type.name) +
+            peers.mapIndexed { index, peer -> (index + 1) to host.peers.value[peer.endpointId]?.status?.diag?.route }
+        val implausible = agreed.filter { (slot, correction) ->
+            abs(correction) > MAX_PLAUSIBLE_WIRED_CORRECTION_MS && routeOf[slot]?.startsWith(BLUETOOTH_ROUTE) != true
+        }
+        val corrections = agreed - implausible.keys
+        corrections[0]?.let { latency.setCalibration(latency.calibrationMs + it) }
+        peers.forEachIndexed { index, peer ->
+            val slot = index + 1
+            // Unsteady and rejected phones are left alone (and not told they were unheard).
+            if (slot !in implausible && slot !in unsteady) host.sendTo(peer.endpointId, CalibrationResult(corrections[slot]))
+        }
+        fun outcome(slot: Int, name: String) = CalibrationOutcome(
+            name, isSelf = slot == 0, correctionMs = corrections[slot], rejectedMs = implausible[slot], unsteadyMs = unsteady[slot],
+        )
+        val outcomes = listOf(outcome(0, deviceName)) + peers.mapIndexed { index, peer -> outcome(index + 1, peer.name) } +
+            second.heldOutcomes
+        log("echo calibration: " + outcomes.joinToString { o -> "${o.name} ${o.label()}" })
+        return outcomes
+    }
+
+    /**
+     * One recording of the calibration track (host). Every phone plays it in sync but is only
+     * audible during its own slot; this phone's microphone records the whole run. Leaves the
      * calibration track paused; throws [CalibrationFailure].
      */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    private suspend fun calibrationPass(host: HostCoordinator, measureOnly: Boolean, step: Int = 0, steps: Int = 0): PassResult {
+    private suspend fun measure(host: HostCoordinator, step: Int, steps: Int): Measurement {
         fun stage(s: CalibrationUi.Stage) {
             _calibration.value = CalibrationUi.Running(s, step, steps)
         }
@@ -519,42 +613,10 @@ class SessionManager(
             val names = listOf(deviceName) + peers.map { it.name }
             val notHeard = measured.phones.filter { it.lateMs == null }.map { names[it.slot] }
             if (notHeard.isNotEmpty()) log("calibration: not heard: ${notHeard.joinToString()}")
-            if (measureOnly) {
-                val lateness = measured.latenessVsHost()
-                val outcomes = listOf(CalibrationOutcome(deviceName, isSelf = true, lateness[0])) +
-                    peers.mapIndexed { index, peer -> CalibrationOutcome(peer.name, isSelf = false, lateness[index + 1]) } +
-                    heldOutcomes
-                val heard = outcomes.mapNotNull { it.correctionMs }
-                if (heard.size < 2) throw CalibrationFailure(R.string.calibration_failed_nothing, notHeard)
-                log(
-                    "sync check: " + outcomes.joinToString { o -> "${o.name} ${o.label()}" } +
-                        "; spread %.1f ms".format(heard.max() - heard.min()),
-                )
-                return PassResult(outcomes, micNote)
-            }
-            val result = measured.copy(
+            val analysis = measured.copy(
                 phones = measured.phones.map { it.copy(lateMs = it.lateMs?.plus(trackingErrorMs[it.slot] ?: 0.0)) },
             )
-            val measuredCorrections = result.corrections(RouteLatencyProfile.MAX_CALIBRATION_MS)
-            if (measuredCorrections.isEmpty()) throw CalibrationFailure(R.string.calibration_failed_nothing, notHeard)
-            // Built-in speakers and wired outputs never hide 150+ ms; a correction that large means
-            // a bad measurement, and applying it would push the next measurement further off.
-            val routeOf = mapOf(0 to routes.route.value.type.name) +
-                peers.mapIndexed { index, peer -> (index + 1) to host.peers.value[peer.endpointId]?.status?.diag?.route }
-            val implausible = measuredCorrections.filter { (slot, correction) ->
-                abs(correction) > MAX_PLAUSIBLE_WIRED_CORRECTION_MS && routeOf[slot]?.startsWith(BLUETOOTH_ROUTE) != true
-            }
-            val corrections = measuredCorrections - implausible.keys
-            corrections[0]?.let { latency.setCalibration(latency.calibrationMs + it) }
-            peers.forEachIndexed { index, peer ->
-                if (index + 1 !in implausible) host.sendTo(peer.endpointId, CalibrationResult(corrections[index + 1]))
-            }
-            fun outcome(slot: Int, name: String) =
-                CalibrationOutcome(name, isSelf = slot == 0, correctionMs = corrections[slot], rejectedMs = implausible[slot])
-            val outcomes = listOf(outcome(0, deviceName)) + peers.mapIndexed { index, peer -> outcome(index + 1, peer.name) } +
-                heldOutcomes
-            log("echo calibration: " + outcomes.joinToString { o -> "${o.name} ${o.label()}" })
-            return PassResult(outcomes, micNote)
+            return Measurement(peers, heldOutcomes, measured, analysis, notHeard, micNote)
         } finally {
             withContext(NonCancellable) {
                 if (!finished) withContext(Dispatchers.IO) { recording.stop() }
@@ -921,6 +983,11 @@ class SessionManager(
                             } else {
                                 report(R.string.calibration_not_heard_here)
                             }
+                        }
+                        ClientCoordinator.Event.CalibrationReset -> {
+                            latency.resetCalibrations()
+                            log("echo calibration reset (from host)")
+                            report(R.string.calibration_reset_by_host)
                         }
                     }
                 }

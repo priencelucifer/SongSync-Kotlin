@@ -3,6 +3,7 @@ package com.songsync.app.sync
 import com.songsync.app.data.model.Track
 import com.songsync.app.net.Bye
 import com.songsync.app.net.CalibrationPlan
+import com.songsync.app.net.CalibrationReset
 import com.songsync.app.net.CalibrationResult
 import com.songsync.app.net.ClientStatus
 import com.songsync.app.net.DeviceDiag
@@ -65,6 +66,8 @@ class ClientCoordinator(
         data object HostLeft : Event
         /** Echo calibration finished; add [correctionMs] to this phone's calibration (null = not heard). */
         data class Calibrated(val correctionMs: Double?) : Event
+        /** The host asked every phone to drop its echo correction. */
+        data object CalibrationReset : Event
     }
 
     val clockSync = ClockSync()
@@ -175,6 +178,7 @@ class ClientCoordinator(
             is Reject -> _events.tryEmit(Event.Rejected(message.reason))
             is CalibrationPlan -> _calibrationSlot.value = message.trackKey to message.slot
             is CalibrationResult -> _events.tryEmit(Event.Calibrated(message.correctionMs))
+            CalibrationReset -> _events.tryEmit(Event.CalibrationReset)
             Bye -> _events.tryEmit(Event.HostLeft)
             else -> Unit
         }
