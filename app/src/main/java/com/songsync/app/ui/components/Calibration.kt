@@ -36,6 +36,9 @@ import com.songsync.app.session.CalibrationUi
 import com.songsync.app.ui.AppViewModel
 import kotlin.math.roundToInt
 
+/** Corrections spreading more than this (about 2 m of sound travel) may be distance, not delay. */
+private const val DISTANCE_WARNING_SPREAD_MS = 6.0
+
 /** What a microphone-based run does. */
 enum class MicRun {
     /** Measure and correct every phone (Auto-calibrate echo). */
@@ -110,6 +113,10 @@ fun CalibrationDialog(state: CalibrationUi, onCancel: () -> Unit, onDismiss: () 
                                 else -> stringResource(R.string.calibration_outcome, outcome.name, correction.roundToInt())
                             },
                         )
+                    }
+                    val corrections = state.outcomes.mapNotNull { it.correctionMs }
+                    if (corrections.size >= 2 && corrections.max() - corrections.min() > DISTANCE_WARNING_SPREAD_MS) {
+                        Text(stringResource(R.string.calibration_distance_warning), style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
                         stringResource(R.string.calibration_done_hint),

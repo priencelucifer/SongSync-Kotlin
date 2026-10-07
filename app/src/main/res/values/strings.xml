@@ -116,10 +116,11 @@
     <!-- Automatic echo calibration -->
     <string name="ok">OK</string>
     <string name="calibrate_button">Auto-calibrate echo</string>
-    <string name="calibrate_hint">Each phone chirps in turn while this phone listens, then every phone is corrected automatically. Put this phone roughly in the middle.</string>
+    <string name="calibrate_hint">Each phone chirps in turn while this phone listens, then every phone is corrected automatically. Put all phones close to this one (within about 30 cm) or all at the same distance from it: sound takes 3 ms per metre, which would be measured too.</string>
+    <string name="calibration_distance_warning">Big differences between phones can also come from distance (3 ms per metre). If the phones were not all close to this one, or at the same distance, calibrate again that way.</string>
     <string name="calibration_running_title">Calibrating echo…</string>
     <string name="calibration_stage_starting">Getting every phone ready…</string>
-    <string name="calibration_stage_listening">Listening… each phone chirps in turn. Keep the phones where they will play and the room quiet.</string>
+    <string name="calibration_stage_listening">Listening… each phone chirps in turn. Keep the phones close to this one (or all at the same distance) and the room quiet.</string>
     <string name="calibration_stage_analyzing">Measuring…</string>
     <string name="calibration_done_title">Echo calibration done</string>
     <string name="calibration_outcome">%1$s: %2$+d ms</string>
