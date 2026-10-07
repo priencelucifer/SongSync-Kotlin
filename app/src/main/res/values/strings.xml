@@ -164,6 +164,8 @@
     <string name="peer_hold">Paused</string>
     <string name="peer_rtt">%1$d ms link</string>
     <string name="peer_different_file">Different file than this phone (may be offset)</string>
+    <string name="peer_bluetooth_output">Bluetooth output: run Auto-calibrate echo</string>
+    <string name="bluetooth_output_hint">Playing through Bluetooth adds 100–300 ms that only Auto-calibrate echo (on the host) can measure. Calibrate again after connecting or switching speakers.</string>
 
     <!-- Client -->
     <string name="client_title">Listening with %1$s</string>

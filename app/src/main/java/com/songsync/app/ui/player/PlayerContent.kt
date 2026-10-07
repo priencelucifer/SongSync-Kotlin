@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.songsync.app.R
 import com.songsync.app.data.model.Track
+import com.songsync.app.playback.AudioRoute
 import com.songsync.app.ui.AppViewModel
 import com.songsync.app.ui.components.rememberCalibrationStarter
 import com.songsync.app.ui.components.routeLabel
@@ -220,6 +221,15 @@ private fun SyncPanel(vm: AppViewModel, isHost: Boolean, onMessage: (String) -> 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (route.type == AudioRoute.Type.BLUETOOTH) {
+            Text(
+                stringResource(R.string.bluetooth_output_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
         val correction = calibration.roundToInt()

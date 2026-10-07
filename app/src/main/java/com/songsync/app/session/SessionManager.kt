@@ -101,6 +101,8 @@ data class PeerUi(
     val linkQuality: Int? = null,
     /** True when this phone decodes a different file of the song than the host (constant offset risk). */
     val differentFile: Boolean = false,
+    /** Plays through Bluetooth: 100-300 ms extra delay that only echo calibration can measure. */
+    val bluetoothOutput: Boolean = false,
 )
 
 /** Progress and outcome of an automatic echo calibration (host). */
@@ -266,6 +268,7 @@ class SessionManager(
                     state = if (hold) PeerState.ON_HOLD else if (track != null && engine.loadedTrackKey != track.key) PeerState.LOADING else PeerState.READY,
                     syncErrorMs = stats.follower.errorMs?.toInt(),
                     rttMs = null,
+                    bluetoothOutput = routes.route.value.type == AudioRoute.Type.BLUETOOTH,
                 )
                 listOf(self) + peers.values.sortedBy { it.name }.map { p ->
                     val key = track?.key
@@ -283,6 +286,7 @@ class SessionManager(
                         rttMs = p.status?.rttMs,
                         linkQuality = p.linkQuality,
                         differentFile = differentFile(hostFormat, p.status?.format, key),
+                        bluetoothOutput = p.status?.diag?.route?.startsWith(BLUETOOTH_ROUTE) == true,
                     )
                 }
             }
@@ -754,7 +758,7 @@ class SessionManager(
             model = "${Build.MANUFACTURER} ${Build.MODEL}".take(28),
             sdk = Build.VERSION.SDK_INT,
             appVersion = appVersion,
-            route = if (route.type == AudioRoute.Type.BLUETOOTH) "BLUETOOTH ${route.name}".take(28) else route.type.name,
+            route = if (route.type == AudioRoute.Type.BLUETOOTH) "$BLUETOOTH_ROUTE ${route.name}".take(28) else route.type.name,
             startLatencyMs = latency.startLatencyMs,
             calibrationMs = latency.calibrationMs,
             clockSpreadMs = estimate?.let { it.offsetSpreadNs.toDouble() / NANOS_PER_MS },
@@ -987,6 +991,7 @@ class SessionManager(
         const val REPORT_PASS_GAP_MS = 1_500L
         const val REPORT_SETTLE_MS = 2_500L
         const val MAX_REPORT_TRACKS = 8
+        val BLUETOOTH_ROUTE = AudioRoute.Type.BLUETOOTH.name
         const val MAX_LOG_LINES = 12
         const val STATS_INTERVAL_MS = 500L
         const val RECONNECT_TIMEOUT_MS = 60_000L
