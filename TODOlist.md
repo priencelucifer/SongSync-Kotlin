@@ -14,6 +14,7 @@ change, run tests and lint before committing, bump the version for every APK the
 | Acceptable | ≤ 10 ms | Fused for music; the image pulls toward the nearest phone |
 | Bad | > 20 ms | Audible doubling or echo on transients (equal-level echo threshold is about 7–8 ms) |
 
+- **Status (2.3.0):** Phase 0 and 1 done, plus a one-tap "Run full sync test" report (host menu). Sim: worst 4.21 ms over 6 seeds, BT-like 6.7 ms. Waiting for the first real-phone report.
 - **Plan goal: ≤ 2 ms p95 on Wi-Fi with built-in speakers, ≤ 5 ms p95 worst case on Wi-Fi.** Bluetooth outputs are a separate, best-effort mode.
 - Floor: 2.9 ms per metre of path difference. Below about 1 ms, gains are audible only near the point where all phones are equidistant.
 - Today: the sim reports ≤ 4.4 ms steady state, but `SimulatedPlayer` gives an *unbiased* reported position (true + ±1.5 ms noise). Real-phone acoustic error is **unknown**, which is why Phase 0 comes first.
@@ -83,21 +84,21 @@ change, run tests and lint before committing, bump the version for every APK the
 
 ## Phase 1: Quick wins (small changes, likely large effect)
 
-- [ ] **1.1 Pin the YouTube stream (itag) like the JioSaavn bitrate**
+- [x] **1.1 Pin the YouTube stream (itag) like the JioSaavn bitrate**
   - What: add an optional `itag: Int?` (and optionally `contentLength: Long?`) to `Track`. The host fills it in `YouTubeSource.resolve`. When it is set, clients must pick exactly that itag and fail with `TrackFailed` rather than fall back. Prefer one family consistently, for example 140 (AAC 44.1 kHz) or 251 (Opus 48 kHz), and decide which by testing. Bump `PROTOCOL_VERSION` to 3, because old clients would silently ignore the pin; note that a mismatch *rejects* old phones (`RejectReason.PROTOCOL_MISMATCH`), which is fine because every phone installs the same APK. No extra plumbing is needed: the host already broadcasts `resolved.track` (`HostCoordinator.kt:130-134`), so `track.copy(itag = …)` reaches clients just like `bitrateKbps`.
   - Files: `data/model/Track.kt`, `data/source/YouTubeSource.kt` (`audioUrl`), `net/Protocol.kt`, `sync/ClientCoordinator.kt` (no change to `allowAlternatives = false`).
   - Why: each phone currently picks the highest `averageBitrate` stream independently. 140 and 251 differ in alignment by 6.5–60 ms, and that offset is invisible to the loop (R §[Different files](reports/Android%20multi%20phone%20audio%20sync.md#different-files-can-hide-6-to-118-ms-of-constant-offset)).
   - Verify: a unit test for a stream-selection helper (pinned itag chosen; missing itag gives an error). A `LiveSourcesTest` (`-PliveTests`) case that resolves the same video twice gets the same itag. Phone test: the 0.2 rows match on all phones, and Check sync (0.1) shows no ≥ 5 ms constant offset that appears only on YouTube.
   - Effort: S
 
-- [ ] **1.2 Stop baking speaker-to-mic distance into calibration**
+- [x] **1.2 Stop baking speaker-to-mic distance into calibration**
   - What: the short-term fix is UX. The calibration dialog tells users to place all phones within about 30 cm of the host, or at equal distance from it, during calibration. Show a warning in the results when the corrections spread more than about 6 ms (about 2 m). Do not persist a correction larger than ±150 ms without confirmation.
   - Files: `ui/components/Calibration.kt`, strings, `session/SessionManager.kt`.
   - Why: the host mic hears flight time at 2.9 ms per metre. A phone 2 m away gets corrected about 5.8 ms early, and that is saved per route in `calibration:<route>` and reused after the phones move (R §[Acoustic calibration](reports/Android%20multi%20phone%20audio%20sync.md#acoustic-calibration-fixes-the-last-mile-but-measures-geometry-too)). The long-term fix is 3.3.
   - Verify: phone test. Calibrate with the phones 2 m apart, then repeat with the phones together. The corrections should differ by about 2.9 ms per metre, which confirms the bias. With the new instructions, Check sync at the listening spot should be ≤ 2 ms.
   - Effort: S
 
-- [ ] **1.3 Wi-Fi low-latency lock during a session**
+- [x] **1.3 Wi-Fi low-latency lock during a session**
   - What: in `SyncPlaybackService` `onCreate` and `onDestroy`, acquire and release a `WifiManager.WifiLock` for the whole session, including while paused. Use `WIFI_MODE_FULL_LOW_LATENCY` on API 29+ and `WIFI_MODE_FULL_HIGH_PERF` below that. Log in diagnostics whether the lock is held.
     - Already present: `WAKE_LOCK`, `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE` in the manifest, and ExoPlayer's `setWakeMode(C.WAKE_MODE_NETWORK)` (`PlayerEngine.kt:72`), which holds a Wi-Fi lock only *while playing* (not low-latency mode).
   - Files: `playback/SyncPlaybackService.kt`.
@@ -105,7 +106,7 @@ change, run tests and lint before committing, bump the version for every APK the
   - Verify: phone test. Compare the 0.3 stats (min/p90 RTT, offset spread) over 5 minutes with and without the lock, screen on and screen off. Expect a lower p90 RTT and spread.
   - Effort: S
 
-- [ ] **1.4 Drop stale clock samples when the Nearby medium changes**
+- [x] **1.4 Drop stale clock samples when the Nearby medium changes**
   - What: on `TransportEvent.BandwidthChanged`, `ClientCoordinator` currently fires only `timeSyncBurst()`. Instead, keep the current estimate, but once the burst has produced at least `minClockSamples` new samples, recompute from post-change samples only. Add `ClockSync.markEpoch()` to discard older samples lazily, so the estimate is never empty. The follower already slews changes under 150 ms (`offsetSlewThresholdMs`).
   - Files: `sync/ClockSync.kt`, `sync/ClientCoordinator.kt`.
   - Why: the BT→Wi-Fi upgrade changes the delay structure. Fastest-quarter filtering over a mixed window can keep biased BT samples for up to 60 s (R §[Phone clocks](reports/Android%20multi%20phone%20audio%20sync.md#phone-clocks-sync-to-about-1-ms-over-wi-fi)).
@@ -113,15 +114,15 @@ change, run tests and lint before committing, bump the version for every APK the
   - Verify: a `ClockSyncTest` case where samples with a 3 ms asymmetric bias are followed by clean samples after `markEpoch()` converges to the true offset within 4 samples. A sim test: switch the `LatencyModel` mid-run and emit `BandwidthChanged`.
   - Effort: S
 
-- [ ] **1.5 Gentler, finer speed correction**
+- [x] **1.5 Gentler, finer speed correction**
   - What: in `SyncConfig`, set `speedStep` 0.0025 → 0.001. Add `smallErrorMaxNudge = 0.005` (±0.5%) for |error| < 20 ms, and keep `maxSpeedNudge = 0.02` only for catch-up beyond 20 ms. Leave `deadbandMs` at 4.0 until 2.1 lands. Re-check `minSpeedDwellMs` (1.5 s): each Sonic change creates a position checkpoint.
   - Files: `sync/SyncConfig.kt`, `sync/DriftController.kt`, `DriftControllerTest.kt`.
   - Why: real systems correct at ≤ 0.05% (Snapcast) with a 2 ms dead-band (AirPlay). Coarse 0.25% steps make the loop overshoot around a 4 ms band (R §[Every accurate system](reports/Android%20multi%20phone%20audio%20sync.md#every-accurate-system-timestamps-audio-against-one-clock)).
   - Verify: the `DriftControllerTest` mapping table is updated. All `SyncSimulationTest` cases still pass, and the steady-state and "BT-like 7.9 ms" figures are no worse; print the number of speed changes per minute and expect fewer. Phone test: listen for time-stretch artefacts at 0.5% versus 2% on a sustained piano or vocal track.
   - Effort: S
 
-- [ ] **1.6 Bluetooth route = separate, honest mode**
-  - What: when `AudioRouteMonitor.route.type == BLUETOOTH`, show a "Bluetooth output: sync is approximate, run echo calibration" chip in the sync UI and on the host's device list (send the route type in `ClientStatus`). Prompt to re-calibrate when the route changes; this is already a handover idea.
+- [x] **1.6 Bluetooth route = separate, honest mode**
+  - What: when `AudioRouteMonitor.route.type == BLUETOOTH`, show a "Bluetooth output: sync is approximate, run echo calibration" chip in the sync UI and on the host's device list (send the route type in `ClientStatus`). Prompt to re-calibrate when the route changes; this is already a handover idea. (2.3.0: device-list mark and player hint done; an automatic prompt on route change is not.)
   - Files: `playback/AudioRouteMonitor.kt`, `net/Protocol.kt`, `ui/session/HostScreen.kt`, `ui/components/Components.kt`.
   - Why: A2DP adds 100–300 ms, and delay reports are only as good as the headset's AVDTP report (R §[ExoPlayer hides the timestamps](reports/Android%20multi%20phone%20audio%20sync.md#exoplayer-hides-the-timestamps-that-sample-accurate-sync-needs)).
   - Verify: `ProtocolTest` covers the new field. Phone test: connect BT earbuds and check that the chip appears and the host sees it.
