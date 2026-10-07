@@ -10,7 +10,7 @@ class SyncReportTest {
     private fun diag(route: String = "SPEAKER") = DeviceDiag(
         model = "Google Pixel 8", sdk = 35, appVersion = "2.3.0", route = route,
         startLatencyMs = 82.0, calibrationMs = 1.5, clockSpreadMs = 0.31, clockSkewPpm = 12.0, phase = "LOCKED",
-        wifiLock = "low latency",
+        wifiLock = "low latency", rttMinMs = 3.2, rttMedianMs = 8.4,
     )
 
     private fun pass(label: String, vararg values: Pair<String, Double?>) =
@@ -25,6 +25,10 @@ class SyncReportTest {
             ReportPhone("Bedroom", isHost = false, diag = diag(), linkQuality = 2, rttP90Ms = 14, syncErrorMs = 1),
             ReportPhone("Kitchen", isHost = false, diag = diag("BLUETOOTH JBL Flip"), linkQuality = 1, rttP90Ms = 60),
             ReportPhone("Old", isHost = false, diag = null, onHold = true),
+            ReportPhone(
+                "Busy", isHost = false, linkQuality = 3, rttP90Ms = 215, onHold = true,
+                diag = diag().copy(wifiLock = "failed: SecurityException", holdReason = "another app took the audio"),
+            ),
         )
         val passes = listOf(
             pass("before", "Host" to 0.0, "Bedroom" to 6.0, "Kitchen" to -3.0),
@@ -45,7 +49,10 @@ class SyncReportTest {
         assertThat(text).contains("after3 failed: Couldn't hear the chirps")
         assertThat(text).contains("RESULT spread avg 1.5 max 1.6 ms -> excellent; repeat ±0.2")
         assertThat(text).contains("mic UNPROCESSED, timestamped")
-        assertThat(text).contains("Bedroom · Google Pixel 8 A35 v2.3.0 · SPEAKER · wifi low latency · Wi-Fi rtt 14 · clk ±0.31 +12ppm")
+        assertThat(text).contains("Bedroom · Google Pixel 8 A35 v2.3.0 · SPEAKER · wifi low latency · Wi-Fi rtt 3/8/14 · clk ±0.31 +12ppm")
+        assertThat(text).contains("Busy · Google Pixel 8 A35 v2.3.0 · PAUSED (another app took the audio)")
+        assertThat(text).contains("! Busy's link is slow at times (p90 215 ms)")
+        assertThat(text).contains("! Busy: Wi-Fi lock failed: SecurityException")
         assertThat(text).contains("Old · (no details: older app?) · PAUSED")
         assertThat(text).contains("Believer: mp4a-latm 44.1 kHz 2ch d2112 itag140 128k | Kitchen DIFF")
         assertThat(text).contains("Kesariya: mp4a-latm 44.1 kHz 2ch d2112 itag140 128k | all 2 same")

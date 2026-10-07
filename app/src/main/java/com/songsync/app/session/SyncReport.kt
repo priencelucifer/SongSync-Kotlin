@@ -99,11 +99,16 @@ object SyncReport {
         val parts = mutableListOf<String>()
         parts += short(p.name)
         parts += d?.let { "${it.model} A${it.sdk} v${it.appVersion}" } ?: "(no details: older app?)"
-        if (p.onHold) parts += "PAUSED"
+        if (p.onHold) parts += "PAUSED" + (d?.holdReason?.let { " ($it)" } ?: "")
         d?.let { parts += it.route }
         d?.let { parts += "wifi ${it.wifiLock ?: "unlocked"}" }
         if (!p.isHost) {
-            parts += listOfNotNull(link(p.linkQuality), p.rttP90Ms?.let { "rtt $it" }).joinToString(" ").ifEmpty { "link ?" }
+            val rtt = if (d?.rttMinMs != null && d.rttMedianMs != null) {
+                "rtt %.0f/%.0f/%s".fmt(d.rttMinMs, d.rttMedianMs, p.rttP90Ms ?: "?")
+            } else {
+                p.rttP90Ms?.let { "rtt p90 $it" }
+            }
+            parts += listOfNotNull(link(p.linkQuality), rtt).joinToString(" ").ifEmpty { "link ?" }
             d?.clockSpreadMs?.let { spread ->
                 parts += "clk ±%.2f".fmt(spread) + (d.clockSkewPpm?.let { " %+.0fppm".fmt(it) } ?: "")
             }
@@ -131,6 +136,10 @@ object SyncReport {
     private fun warnings(phones: List<ReportPhone>, tracks: List<TrackFormats>, hostName: String): List<String> {
         val w = mutableListOf<String>()
         phones.filter { it.onHold }.forEach { w += "${it.name} is paused on that phone; tap Rejoin and run again" }
+        phones.filter { !it.isHost && (it.rttP90Ms ?: 0) > SLOW_LINK_P90_MS }
+            .forEach { w += "${it.name}'s link is slow at times (p90 ${it.rttP90Ms} ms); keep phones on one Wi-Fi, close to the router" }
+        phones.filter { it.diag != null && it.diag.wifiLock?.startsWith("low") != true && it.diag.wifiLock?.startsWith("high") != true }
+            .forEach { w += "${it.name}: Wi-Fi lock ${it.diag?.wifiLock ?: "not held"} (power save can add 100 ms delays)" }
         phones.filter { it.diag?.route?.startsWith("BLUETOOTH") == true }
             .forEach { w += "${it.name} plays through Bluetooth: expect 100-300 ms extra, calibrate after connecting" }
         phones.filter { !it.isHost && it.linkQuality == 1 }
@@ -157,6 +166,8 @@ object SyncReport {
     }
 
     private fun short(name: String) = name.take(10)
+
+    private const val SLOW_LINK_P90_MS = 100
 
     private fun String.fmt(vararg args: Any?) = String.format(Locale.US, this, *args)
 }

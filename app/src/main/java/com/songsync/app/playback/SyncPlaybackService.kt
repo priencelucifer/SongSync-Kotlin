@@ -115,25 +115,37 @@ class SyncPlaybackService : Service() {
      * (also while paused, when ExoPlayer's own lock is released) keeps the radio awake.
      */
     private fun acquireWifiLock() {
-        val wifi = applicationContext.getSystemService(WifiManager::class.java) ?: return
-        val lowLatency = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-        @Suppress("DEPRECATION") // HIGH_PERF is deprecated on API 34+, where LOW_LATENCY is used instead
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-        } else {
-            WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        val wifi = applicationContext.getSystemService(WifiManager::class.java)
+        if (wifi == null) {
+            WifiLockState.mode.value = "unavailable (no Wi-Fi service)"
+            return
         }
-        wifiLock = runCatching {
-            wifi.createWifiLock(mode, "SongSync:sync").apply {
-                setReferenceCounted(false)
-                acquire()
+        // Low latency where available, high-perf as a fallback; the reason is kept for the sync
+        // report when neither is held.
+        val attempts = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(WifiManager.WIFI_MODE_FULL_LOW_LATENCY to "low latency")
+            @Suppress("DEPRECATION") // HIGH_PERF is deprecated on API 34+; only a fallback there
+            add(WifiManager.WIFI_MODE_FULL_HIGH_PERF to "high perf")
+        }
+        var failure = "not held"
+        for ((mode, label) in attempts) {
+            val lock = try {
+                wifi.createWifiLock(mode, "SongSync:sync").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            } catch (e: RuntimeException) {
+                failure = "failed: ${e.javaClass.simpleName} ${e.message.orEmpty()}".take(60)
+                continue
             }
-        }.getOrNull()
-        WifiLockState.mode.value = when {
-            wifiLock?.isHeld != true -> null
-            lowLatency -> "low latency"
-            else -> "high perf"
+            if (lock.isHeld) {
+                wifiLock = lock
+                WifiLockState.mode.value = label + if (wifi.isWifiEnabled) "" else " (Wi-Fi off)"
+                return
+            }
+            lock.release()
         }
+        WifiLockState.mode.value = failure + if (wifi.isWifiEnabled) "" else " (Wi-Fi off)"
     }
 
     private fun startInForeground(notification: android.app.Notification) {

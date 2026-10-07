@@ -232,6 +232,7 @@ class SessionManager(
             onHold.collect { hold ->
                 follower.setHold(hold)
                 _client.value?.onHold = hold
+                if (hold) log("paused on this phone: ${holdReason()}")
             }
         }
         scope.launch { transport.events.collect(::onTransportEvent) }
@@ -395,7 +396,8 @@ class SessionManager(
                         micNote = pass.micNote
                         ReportPass(label, pass.outcomes)
                     } catch (e: CalibrationFailure) {
-                        ReportPass(label, emptyList(), context.getString(e.reason))
+                        val who = e.notHeard.takeIf { it.isNotEmpty() }?.let { " [not heard: ${it.joinToString()}]" }.orEmpty()
+                        ReportPass(label, emptyList(), context.getString(e.reason) + who)
                     }
                 }
             }
@@ -444,7 +446,8 @@ class SessionManager(
         }
     }
 
-    private class CalibrationFailure(@StringRes val reason: Int) : Exception()
+    /** [notHeard] names the phones whose chirps were missing, when the recording got that far. */
+    private class CalibrationFailure(@StringRes val reason: Int, val notHeard: List<String> = emptyList()) : Exception()
 
     private class PassResult(val outcomes: List<CalibrationOutcome>, val micNote: String)
 
@@ -504,13 +507,16 @@ class SessionManager(
                     (index + 1) to (host.peers.value[peer.endpointId]?.status?.syncErrorMs?.toDouble() ?: 0.0)
                 }
             val measured = withContext(Dispatchers.Default) { CalibrationAnalyzer.analyze(audio, timeline, slots) }
+            val names = listOf(deviceName) + peers.map { it.name }
+            val notHeard = measured.phones.filter { it.lateMs == null }.map { names[it.slot] }
+            if (notHeard.isNotEmpty()) log("calibration: not heard: ${notHeard.joinToString()}")
             if (measureOnly) {
                 val lateness = measured.latenessVsHost()
                 val outcomes = listOf(CalibrationOutcome(deviceName, isSelf = true, lateness[0])) +
                     peers.mapIndexed { index, peer -> CalibrationOutcome(peer.name, isSelf = false, lateness[index + 1]) } +
                     heldOutcomes
                 val heard = outcomes.mapNotNull { it.correctionMs }
-                if (heard.size < 2) throw CalibrationFailure(R.string.calibration_failed_nothing)
+                if (heard.size < 2) throw CalibrationFailure(R.string.calibration_failed_nothing, notHeard)
                 log(
                     "sync check: " + outcomes.joinToString { o -> "${o.name} ${o.label()}" } +
                         "; spread %.1f ms".format(heard.max() - heard.min()),
@@ -521,7 +527,7 @@ class SessionManager(
                 phones = measured.phones.map { it.copy(lateMs = it.lateMs?.plus(trackingErrorMs[it.slot] ?: 0.0)) },
             )
             val corrections = result.corrections(RouteLatencyProfile.MAX_CALIBRATION_MS)
-            if (corrections.isEmpty()) throw CalibrationFailure(R.string.calibration_failed_nothing)
+            if (corrections.isEmpty()) throw CalibrationFailure(R.string.calibration_failed_nothing, notHeard)
             corrections[0]?.let { latency.setCalibration(latency.calibrationMs + it) }
             peers.forEachIndexed { index, peer -> host.sendTo(peer.endpointId, CalibrationResult(corrections[index + 1])) }
             val outcomes = listOf(CalibrationOutcome(deviceName, isSelf = true, corrections[0])) +
@@ -749,6 +755,13 @@ class SessionManager(
         while (formatHistory.size > MAX_REPORT_TRACKS) formatHistory.remove(formatHistory.keys.first())
     }
 
+    /** Why this phone is on hold, for diagnostics; null when it is not. */
+    private fun holdReason(): String? = when {
+        _localHold.value -> "user"
+        engine.systemHold.value -> "another app took the audio"
+        else -> null
+    }
+
     /** This phone's details for the sync report (sent to the host in every status). */
     private fun deviceDiag(): DeviceDiag {
         val route = routes.route.value
@@ -766,6 +779,9 @@ class SessionManager(
             hardResyncs = status.hardResyncs,
             phase = status.phase.name,
             wifiLock = WifiLockState.mode.value,
+            holdReason = holdReason(),
+            rttMinMs = estimate?.let { it.minRttNs.toDouble() / NANOS_PER_MS },
+            rttMedianMs = estimate?.let { it.medianRttNs.toDouble() / NANOS_PER_MS },
         )
     }
 

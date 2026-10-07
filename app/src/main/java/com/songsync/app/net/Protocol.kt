@@ -95,8 +95,12 @@ data class DeviceDiag(
     val clockSkewPpm: Double? = null,
     val hardResyncs: Int = 0,
     val phase: String = "",
-    /** Wi-Fi lock held for the session ("low latency" / "high perf"), or null. */
+    /** Wi-Fi lock held for the session ("low latency" / "high perf"), or why not. */
     val wifiLock: String? = null,
+    /** Why the phone is on hold ("user", "another app took the audio"), null if it is not. */
+    val holdReason: String? = null,
+    val rttMinMs: Double? = null,
+    val rttMedianMs: Double? = null,
 )
 
 /**
