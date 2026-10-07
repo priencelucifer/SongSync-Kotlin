@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package com.songsync.app.sync.sim
 
 import com.songsync.app.data.model.ResolvedTrack

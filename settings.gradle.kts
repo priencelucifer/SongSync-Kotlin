@@ -25,4 +25,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "SongSync"
-include(":app")
+include(":app", ":baselineprofile")
