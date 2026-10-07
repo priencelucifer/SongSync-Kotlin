@@ -15,6 +15,7 @@ change, run tests and lint before committing, bump the version for every APK the
 | Bad | > 20 ms | Audible doubling or echo on transients (equal-level echo threshold is about 7–8 ms) |
 
 - **Status (2.3.0):** Phase 0 and 1 done, plus a one-tap "Run full sync test" report (host menu). Sim: worst 4.21 ms over 6 seeds, BT-like 6.7 ms. Waiting for the first real-phone report.
+- **Status (2.3.4):** field reports exposed bad echo calibrations (chirp aliasing, up to +300 ms) that every song then carried. Fixed in 2.3.2-2.3.4: unambiguous chirp pattern, ±120 ms cap on speaker/wired, two-run agreement before applying, measure-only sync test, host "Reset echo calibration (all phones)". Next: confirm on phones, then Phase 2.
 - **Plan goal: ≤ 2 ms p95 on Wi-Fi with built-in speakers, ≤ 5 ms p95 worst case on Wi-Fi.** Bluetooth outputs are a separate, best-effort mode.
 - Floor: 2.9 ms per metre of path difference. Below about 1 ms, gains are audible only near the point where all phones are equidistant.
 - Today: the sim reports ≤ 4.4 ms steady state, but `SimulatedPlayer` gives an *unbiased* reported position (true + ±1.5 ms noise). Real-phone acoustic error is **unknown**, which is why Phase 0 comes first.
