@@ -34,9 +34,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-/** Which Wi-Fi lock the session service holds (null = none), for diagnostics. */
+/** Which Wi-Fi lock the session service holds, or why none, for diagnostics. */
 object WifiLockState {
-    val mode = MutableStateFlow<String?>(null)
+    val mode = MutableStateFlow<String?>("none: session service not started")
 }
 
 /** What the ongoing notification shows; produced by the session manager. */
@@ -105,7 +105,7 @@ class SyncPlaybackService : Service() {
         session = null
         wifiLock?.takeIf { it.isHeld }?.release()
         wifiLock = null
-        WifiLockState.mode.value = null
+        WifiLockState.mode.value = "none: session service stopped"
         super.onDestroy()
     }
 
