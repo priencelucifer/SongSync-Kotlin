@@ -167,7 +167,10 @@ class PlaybackFollower(
         state = newState
         val seamless = (phase == FollowerPhase.LOCKED || phase == FollowerPhase.SETTLING) &&
             newState.isContinuationOf(previous, hostNow())
-        if (seamless) return
+        if (seamless) {
+            if (armedSeq == previous.seq) armedSeq = newState.seq // same motion: keep playing as is
+            return
+        }
         armedSeq = NONE
         evaluate()
     }
@@ -269,7 +272,10 @@ class PlaybackFollower(
     private fun evaluatePlaying(s: PlaybackState) {
         when (phase) {
             FollowerPhase.LOCKED, FollowerPhase.SETTLING -> {
-                if (player.isPlaying) return // the closed loop in measure() owns it
+                // Still on the timeline it started for: the closed loop in measure() owns it. A
+                // new timeline (a seek while playing, a big clock jump) re-arms right away instead
+                // of playing the old position until a re-sync, which back-off can delay for long.
+                if (player.isPlaying && armedSeq == s.seq) return
                 if (!player.isReady) {
                     // Rebuffering: stop ExoPlayer from resuming at a stale position on its own.
                     emit(SyncEvent.Type.REBUFFER)
