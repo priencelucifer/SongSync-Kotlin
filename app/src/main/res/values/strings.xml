@@ -196,6 +196,7 @@
     <string name="diag_resyncs">Hard resyncs</string>
     <string name="diag_link">Link</string>
     <string name="diag_format">Playing file</string>
+    <string name="diag_wifi_lock">Wi-Fi lock</string>
     <string name="diag_log">Recent events</string>
     <string name="link_low">Bluetooth link</string>
     <string name="link_medium">Wi-Fi link</string>

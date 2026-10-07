@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import androidx.annotation.OptIn
@@ -30,7 +31,13 @@ import com.songsync.app.session.SessionManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+
+/** Which Wi-Fi lock the session service holds (null = none), for diagnostics. */
+object WifiLockState {
+    val mode = MutableStateFlow<String?>(null)
+}
 
 /** What the ongoing notification shows; produced by the session manager. */
 data class NotificationContent(
@@ -58,9 +65,12 @@ class SyncPlaybackService : Service() {
 
     private val graph get() = (application as SongSyncApp).graph
 
+    private var wifiLock: WifiManager.WifiLock? = null
+
     override fun onCreate() {
         super.onCreate()
         ensureChannel(this)
+        acquireWifiLock()
         val mediaSession = MediaSession.Builder(this, graph.sessionPlayer)
             .setSessionActivity(contentIntent())
             .build()
@@ -93,7 +103,37 @@ class SyncPlaybackService : Service() {
         scope.cancel()
         session?.release()
         session = null
+        wifiLock?.takeIf { it.isHeld }?.release()
+        wifiLock = null
+        WifiLockState.mode.value = null
         super.onDestroy()
+    }
+
+    /**
+     * Wi-Fi power save holds frames for a sleeping phone until the next beacon (~100 ms), and
+     * only in one direction, which skews clock sync. A low-latency lock for the whole session
+     * (also while paused, when ExoPlayer's own lock is released) keeps the radio awake.
+     */
+    private fun acquireWifiLock() {
+        val wifi = applicationContext.getSystemService(WifiManager::class.java) ?: return
+        val lowLatency = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        @Suppress("DEPRECATION") // HIGH_PERF is deprecated on API 34+, where LOW_LATENCY is used instead
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+        } else {
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        }
+        wifiLock = runCatching {
+            wifi.createWifiLock(mode, "SongSync:sync").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }.getOrNull()
+        WifiLockState.mode.value = when {
+            wifiLock?.isHeld != true -> null
+            lowLatency -> "low latency"
+            else -> "high perf"
+        }
     }
 
     private fun startInForeground(notification: android.app.Notification) {

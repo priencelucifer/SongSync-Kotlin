@@ -35,6 +35,7 @@ import com.songsync.app.playback.NotificationContent
 import com.songsync.app.playback.PlayerEngine
 import com.songsync.app.playback.RouteLatencyProfile
 import com.songsync.app.playback.SyncPlaybackService
+import com.songsync.app.playback.WifiLockState
 import com.songsync.app.sync.ClientCoordinator
 import com.songsync.app.sync.FollowerStatus
 import com.songsync.app.sync.HostCoordinator
@@ -143,6 +144,7 @@ data class SyncStats(
     val clockSkewPpm: Double? = null,
     /** What this phone is decoding ([AudioFormatInfo.summary]). */
     val format: String? = null,
+    val wifiLock: String? = null,
 )
 
 /**
@@ -709,6 +711,7 @@ class SessionManager(
                         clockAgeS = estimate?.let { (clock.nowNs() - it.newestSampleAtNs) / 1e9 },
                         clockSkewPpm = estimate?.skewPpm,
                         format = engine.audioFormat.value?.summary(),
+                        wifiLock = WifiLockState.mode.value,
                     )
                     delay(STATS_INTERVAL_MS)
                 }
@@ -758,6 +761,7 @@ class SessionManager(
             clockSkewPpm = estimate?.skewPpm,
             hardResyncs = status.hardResyncs,
             phase = status.phase.name,
+            wifiLock = WifiLockState.mode.value,
         )
     }
 

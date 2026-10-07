@@ -101,6 +101,7 @@ object SyncReport {
         parts += d?.let { "${it.model} A${it.sdk} v${it.appVersion}" } ?: "(no details: older app?)"
         if (p.onHold) parts += "PAUSED"
         d?.let { parts += it.route }
+        d?.let { parts += "wifi ${it.wifiLock ?: "unlocked"}" }
         if (!p.isHost) {
             parts += listOfNotNull(link(p.linkQuality), p.rttP90Ms?.let { "rtt $it" }).joinToString(" ").ifEmpty { "link ?" }
             d?.clockSpreadMs?.let { spread ->

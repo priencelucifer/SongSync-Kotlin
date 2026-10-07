@@ -93,6 +93,8 @@ data class DeviceDiag(
     val clockSkewPpm: Double? = null,
     val hardResyncs: Int = 0,
     val phase: String = "",
+    /** Wi-Fi lock held for the session ("low latency" / "high perf"), or null. */
+    val wifiLock: String? = null,
 )
 
 /**

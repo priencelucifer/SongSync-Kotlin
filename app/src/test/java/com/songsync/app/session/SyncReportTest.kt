@@ -10,6 +10,7 @@ class SyncReportTest {
     private fun diag(route: String = "SPEAKER") = DeviceDiag(
         model = "Google Pixel 8", sdk = 35, appVersion = "2.3.0", route = route,
         startLatencyMs = 82.0, calibrationMs = 1.5, clockSpreadMs = 0.31, clockSkewPpm = 12.0, phase = "LOCKED",
+        wifiLock = "low latency",
     )
 
     private fun pass(label: String, vararg values: Pair<String, Double?>) =
@@ -44,7 +45,8 @@ class SyncReportTest {
         assertThat(text).contains("after3 failed: Couldn't hear the chirps")
         assertThat(text).contains("RESULT spread avg 1.5 max 1.6 ms -> excellent; repeat ±0.2")
         assertThat(text).contains("mic UNPROCESSED, timestamped")
-        assertThat(text).contains("Bedroom · Google Pixel 8 A35 v2.3.0 · SPEAKER · Wi-Fi rtt 14 · clk ±0.31 +12ppm")
+        assertThat(text).contains("Bedroom · Google Pixel 8 A35 v2.3.0 · SPEAKER · wifi low latency · Wi-Fi rtt 14 · clk ±0.31 +12ppm")
+        assertThat(text).contains("Old · (no details: older app?) · PAUSED")
         assertThat(text).contains("Believer: mp4a-latm 44.1 kHz 2ch d2112 itag140 128k | Kitchen DIFF")
         assertThat(text).contains("Kesariya: mp4a-latm 44.1 kHz 2ch d2112 itag140 128k | all 2 same")
         assertThat(text).contains("! Old is paused on that phone")
