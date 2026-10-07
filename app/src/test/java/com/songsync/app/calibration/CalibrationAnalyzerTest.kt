@@ -107,6 +107,27 @@ class CalibrationAnalyzerTest {
     }
 
     @Test
+    fun `a host far off the timeline is not mistaken for its neighbouring chirp`() {
+        // The real report: the host played ~300 ms early (runaway calibration), its chirps were
+        // matched to their neighbours 400 ms away and both guests were "measured" ~100-150 ms early.
+        val phones = listOf(Phone(-300.0, 1.0), Phone(0.0, 0.4), Phone(4.0, 0.3))
+        val (recording, timeline) = record(phones, micDelayMs = 60.0)
+        val lateness = CalibrationAnalyzer.analyze(recording, timeline, phones.size).latenessVsHost()
+        assertThat(lateness.getValue(1)).isWithin(0.3).of(300.0)
+        assertThat(lateness.getValue(2)).isWithin(0.3).of(304.0)
+    }
+
+    @Test
+    fun `large offsets either way are measured, not aliased`() {
+        for (offset in listOf(-650.0, -420.0, -210.0, 190.0, 260.0, 410.0, 700.0)) {
+            val phones = listOf(Phone(0.0, 1.0), Phone(offset, 0.4))
+            val (recording, timeline) = record(phones, micDelayMs = 90.0, seed = offset.toInt())
+            val lateness = CalibrationAnalyzer.analyze(recording, timeline, phones.size).latenessVsHost()
+            assertThat(lateness.getValue(1)).isWithin(0.3).of(offset)
+        }
+    }
+
+    @Test
     fun `nothing heard at all yields no corrections`() {
         val phones = listOf(Phone(0.0, 0.0), Phone(0.0, 0.0))
         val (recording, timeline) = record(phones, micDelayMs = 30.0)

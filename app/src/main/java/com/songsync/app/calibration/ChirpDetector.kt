@@ -21,7 +21,11 @@ class ChirpDetector(private val template: FloatArray) {
         val snr: Double,
     )
 
-    fun find(recording: ShortArray, size: Int, from: Int, to: Int): Peak? {
+    /**
+     * Matched-filter envelope for chirp starts at samples [from] until [to] (clipped to the
+     * recording): element i belongs to sample `start + i`, where start is returned with it.
+     */
+    fun envelope(recording: ShortArray, size: Int, from: Int, to: Int): Pair<Int, DoubleArray>? {
         val start = from.coerceAtLeast(0)
         val lags = (to.coerceAtMost(size) - start)
         if (lags <= 2) return null
@@ -51,7 +55,12 @@ class ChirpDetector(private val template: FloatArray) {
         }
         fft(xr, xi, inverse = true)
 
-        val envelope = DoubleArray(lags) { hypot(xr[it], xi[it]) }
+        return start to DoubleArray(lags) { hypot(xr[it], xi[it]) }
+    }
+
+    fun find(recording: ShortArray, size: Int, from: Int, to: Int): Peak? {
+        val (start, envelope) = envelope(recording, size, from, to) ?: return null
+        val lags = envelope.size
         val max = envelope.max()
         if (max <= 0.0) return null
         val noise = envelope.sorted()[lags / 2].coerceAtLeast(1e-9)

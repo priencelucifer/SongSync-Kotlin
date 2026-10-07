@@ -29,16 +29,21 @@ object CalibrationSignal {
     const val SAMPLE_RATE = 48_000
     const val LEAD_IN_MS = 12_000L
     const val SLOT_MS = 2_000L
-    const val CHIRPS_PER_SLOT = 4
-    const val CHIRP_OFFSET_MS = 250L
-    const val CHIRP_SPACING_MS = 400L
+    /**
+     * Chirp starts within a slot. Deliberately uneven: with even spacing (v1/v2: every 400 ms) a
+     * phone ~300 ms off matched its neighbouring chirps and was measured 400 ms wrong, which
+     * calibration then "corrected" into a runaway. With these gaps (300/450/350 ms) any wrong
+     * alignment lines up at most one of the four chirps.
+     */
+    private val CHIRP_OFFSETS_MS = longArrayOf(250, 550, 1_000, 1_350)
+    val CHIRPS_PER_SLOT = CHIRP_OFFSETS_MS.size
     const val TAIL_MS = 1_000L
     const val CHIRP_MS = 30
     /** Phones measured per run. */
     const val MAX_SLOTS = 8
 
     /** Bump with any layout change: every phone must generate the identical track. */
-    private const val ID_PREFIX = "calib-v2-"
+    private const val ID_PREFIX = "calib-v3-"
     private const val F_START = 2_000.0
     private const val F_END = 8_000.0
     private const val AMPLITUDE = 0.7
@@ -63,7 +68,7 @@ object CalibrationSignal {
 
     fun durationMs(slots: Int) = LEAD_IN_MS + slots * SLOT_MS + TAIL_MS
 
-    fun chirpStartMs(slot: Int, index: Int) = LEAD_IN_MS + slot * SLOT_MS + CHIRP_OFFSET_MS + index * CHIRP_SPACING_MS
+    fun chirpStartMs(slot: Int, index: Int) = LEAD_IN_MS + slot * SLOT_MS + CHIRP_OFFSETS_MS[index]
 
     /** Track positions during which the phone with [slot] is audible. */
     fun isInSlot(slot: Int, positionMs: Long): Boolean {

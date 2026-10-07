@@ -58,8 +58,16 @@ object CalibrationAnalyzer {
     private const val MIN_SNR = 6.0
     private const val MIN_CHIRPS = 3
     private const val MAX_SPREAD_MS = 5.0
-    private const val COARSE_WINDOW_MS = 600.0
-    private const val FINE_WINDOW_MS = 150.0
+    /**
+     * How far from its expected place a phone's chirp pattern is searched. Covers the unknown
+     * microphone latency and Bluetooth outputs, and stays below half a slot so a neighbouring
+     * phone's (identical) pattern can never be taken for this one.
+     */
+    private const val PATTERN_SEARCH_MS = 800.0
+    /** Tolerance per chirp when lining up the pattern (sample clocks differ by up to ~100 ppm). */
+    private const val PATTERN_POOL_MS = 0.2
+    /** Window for the precise first-arrival timing of each chirp around the aligned pattern. */
+    private const val FINE_WINDOW_MS = 40.0
 
     /** [timeline] must be the playing state the calibration track ran on (host clock). */
     fun analyze(recording: Recording, timeline: PlaybackState, slots: Int): Result {
@@ -70,34 +78,74 @@ object CalibrationAnalyzer {
             return (hostNs - recording.startTimeNs).toDouble() * sr / 1e9
         }
         fun msToSamples(ms: Double) = (ms * sr / 1_000).toInt()
-
-        // 1. Microphone-path delay: find the host's first chirp (nothing precedes it but silence).
-        val first = expectedSample(CalibrationSignal.chirpStartMs(0, 0))
-        val coarse = detector.find(
-            recording.samples, recording.size,
-            (first - msToSamples(COARSE_WINDOW_MS)).toInt(), (first + msToSamples(COARSE_WINDOW_MS)).toInt(),
-        )?.takeIf { it.snr >= MIN_SNR } ?: return Result((0 until slots).map { PhoneResult(it, null, 0) })
-        var micDelay = coarse.sample - first
-
-        fun measure(slot: Int): List<Double> = (0 until CalibrationSignal.CHIRPS_PER_SLOT).mapNotNull { index ->
-            val expected = expectedSample(CalibrationSignal.chirpStartMs(slot, index)) + micDelay
-            detector.find(
-                recording.samples, recording.size,
-                (expected - msToSamples(FINE_WINDOW_MS)).toInt(), (expected + msToSamples(FINE_WINDOW_MS)).toInt(),
-            )?.takeIf { it.snr >= MIN_SNR }?.let { (it.sample - expected) * 1_000 / sr }
+        fun expectedChirps(slot: Int) = DoubleArray(CalibrationSignal.CHIRPS_PER_SLOT) {
+            expectedSample(CalibrationSignal.chirpStartMs(slot, it))
         }
 
-        // 2. Refine the microphone delay with all of the host's chirps.
-        measure(0).takeIf { it.isNotEmpty() }?.let { micDelay += median(it) * sr / 1_000 }
+        /**
+         * Shift (samples) at which all of a slot's chirps line up best, searched around [center].
+         * Matching the whole uneven pattern at once is what makes it unambiguous.
+         */
+        fun alignPattern(expected: DoubleArray, center: Int): Int? {
+            val search = msToSamples(PATTERN_SEARCH_MS)
+            val pool = msToSamples(PATTERN_POOL_MS).coerceAtLeast(1)
+            val (start, env) = detector.envelope(
+                recording.samples, recording.size,
+                (expected.first() + center - search - pool).toInt(), (expected.last() + center + search + pool + 1).toInt(),
+            ) ?: return null
+            val noise = env.copyOf().also { it.sort() }[env.size / 2].coerceAtLeast(1e-9)
+            val pooled = DoubleArray(env.size) { i ->
+                var m = 0.0
+                for (j in maxOf(0, i - pool)..minOf(env.size - 1, i + pool)) m = maxOf(m, env[j])
+                m / noise
+            }
+            var bestShift: Int? = null
+            var bestScore = 0.0
+            for (shift in center - search..center + search) {
+                var score = 0.0
+                for (e in expected) {
+                    val i = (e + shift).toInt() - start
+                    if (i in pooled.indices) score += minOf(pooled[i], PATTERN_SCORE_CAP)
+                }
+                if (score > bestScore) {
+                    bestScore = score
+                    bestShift = shift
+                }
+            }
+            return bestShift
+        }
 
-        // 3. Each phone's residual lateness.
+        /** Precise arrival errors (ms vs. expected) of the chirps found near the aligned pattern. */
+        fun measure(expected: DoubleArray, shift: Int): List<Double> = expected.toList().mapNotNull { e ->
+            val at = e + shift
+            detector.find(
+                recording.samples, recording.size,
+                (at - msToSamples(FINE_WINDOW_MS)).toInt(), (at + msToSamples(FINE_WINDOW_MS)).toInt(),
+            )?.takeIf { it.snr >= MIN_SNR }?.let { (it.sample - e) * 1_000 / sr }
+        }
+
+        fun reliable(errors: List<Double>) = errors.size >= MIN_CHIRPS && errors.max() - errors.min() <= MAX_SPREAD_MS
+
+        // 1. The host's own chirps give the microphone-path delay (the reference everyone is
+        //    measured against). Without them, phones are still measured relative to each other.
+        val hostExpected = expectedChirps(0)
+        val hostShift = alignPattern(hostExpected, center = 0)
+        val hostErrors = hostShift?.let { measure(hostExpected, it) }.orEmpty()
+        val micDelayMs = if (reliable(hostErrors)) median(hostErrors) else null
+
+        // 2. Every phone: align its pattern near the host's, then time each chirp precisely.
         val phones = (0 until slots).map { slot ->
-            val errors = measure(slot)
-            val reliable = errors.size >= MIN_CHIRPS && errors.max() - errors.min() <= MAX_SPREAD_MS
-            PhoneResult(slot, if (reliable) median(errors) else null, errors.size)
+            val expected = expectedChirps(slot)
+            val center = if (micDelayMs != null) msToSamples(micDelayMs) else 0
+            val errors = alignPattern(expected, center)?.let { measure(expected, it) }.orEmpty()
+            val late = if (reliable(errors)) median(errors) - (micDelayMs ?: 0.0) else null
+            PhoneResult(slot, if (slot == 0 && micDelayMs == null) null else late, errors.size)
         }
         return Result(phones)
     }
+
+    /** One very loud chirp (or click) must not outweigh the other three in the pattern score. */
+    private const val PATTERN_SCORE_CAP = 50.0
 
     private fun median(values: List<Double>): Double {
         val sorted = values.sorted()
