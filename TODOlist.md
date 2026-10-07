@@ -31,7 +31,7 @@ change, run tests and lint before committing, bump the version for every APK the
 
 ## Phase 0: Measure first (find where the delay actually comes from on real phones)
 
-- [ ] **0.1 "Check sync" (measure-only acoustic test)**
+- [x] **0.1 "Check sync" (measure-only acoustic test)**
   - What: a host action that runs the existing calibration flow but **applies nothing**. Instead it shows each phone's residual lateness in ms, relative to the host, in a result dialog and in the sync log.
     - Note (verified in code): `autoCalibrate()` replaces the current song with the 48 kHz calibration WAV (`playNow`, `SessionManager.kt:346`) and pauses in its `finally`. So Check sync measures the calibration-WAV path after a fresh scheduled start, not steady music. Remember the song and position first and restore them afterwards.
     - Optional variant: keep all phones audible and run a click track (`ClickTrack`) instead of slots, to measure the *combined* sound.
@@ -40,21 +40,21 @@ change, run tests and lint before committing, bump the version for every APK the
   - Verify: unit test in `CalibrationAnalyzerTest`: a measure-only result equals the analyze result and no correction is produced. Phone test: 3 phones side by side, run Check sync 3 times, record the per-phone ms values. Expect a repeatability of ±0.5 ms; if it is worse, the measurement itself needs work before tuning anything.
   - Effort: M
 
-- [ ] **0.2 Log what each phone is actually playing**
+- [x] **0.2 Log what each phone is actually playing**
   - What: on `Player.Listener.onTracksChanged`, read the selected audio `Format` (`sampleMimeType`, `codecs`, `sampleRate`, `channelCount`, `encoderDelay`, `encoderPadding`, `bitrate`). Get the decoder name from `AnalyticsListener.onAudioDecoderInitialized`. For YouTube, also log the chosen itag and content length (from `YouTubeSource.audioUrl`; NewPipe `AudioStream.itag`). Show these in the diagnostics panel. Send a compact summary to the host (optional field in `TrackReady` or `ClientStatus`; optional fields are wire-compatible because `ignoreUnknownKeys = true`), and have the host flag phones whose format differs.
   - Files: `playback/PlayerEngine.kt`, `data/source/YouTubeSource.kt`, `net/Protocol.kt`, `session/SessionManager.kt` (`SyncStats`), `ui/components/Components.kt`.
   - Why: different files carry different priming: AAC 2112 samples = 47.9 ms, HE-AAC 5186 = 118 ms, Opus 312 = 6.5 ms. YouTube itags 140 and 251 are not time-aligned (R §[Different files](reports/Android%20multi%20phone%20audio%20sync.md#different-files-can-hide-6-to-118-ms-of-constant-offset)).
   - Verify: `ProtocolTest` round-trips the new optional fields and decodes old messages without them. Phone test: play 5 YouTube songs on 3 phones and compare the itag, encoderDelay and sampleRate rows.
   - Effort: S
 
-- [ ] **0.3 Clock-quality stats**
+- [x] **0.3 Clock-quality stats**
   - What: extend `ClockSync.Estimate` with the spread of the best-quarter offsets (MAD or IQR, in µs) and the age of the newest sample used. Show min/median/p90 RTT, offset spread, link quality (`BandwidthChanged.quality`), and the offset change per minute (an apparent skew in ppm). Log `clock offset jump` events with their size.
   - Files: `sync/ClockSync.kt`, `sync/ClientCoordinator.kt`, `session/SessionManager.kt`, `ui/components/Components.kt`.
   - Why: the expected accuracy is ±1 ms over Wi-Fi and ±3–5 ms over BLE; Wi-Fi power save adds ≥ 100 ms of *asymmetric* delay (R §[Phone clocks](reports/Android%20multi%20phone%20audio%20sync.md#phone-clocks-sync-to-about-1-ms-over-wi-fi)).
   - Verify: `ClockSyncTest` checks the spread on synthetic samples with known jitter. Phone test: screenshot the diagnostics on Wi-Fi LAN and on a Bluetooth-only link (Wi-Fi off).
   - Effort: S
 
-- [ ] **0.4 External recording protocol (no code)**
+- [x] **0.4 External recording protocol (no code)**
   - What: write down a repeatable test in the README or handover:
     1. Play the `CLICK_TEST` click track on all phones placed in a row about 10 cm from a laptop or third-phone mic.
     2. Record 5 minutes.
@@ -64,7 +64,7 @@ change, run tests and lint before committing, bump the version for every APK the
   - Verify: three runs give consistent numbers (±0.5 ms).
   - Effort: S
 
-- [ ] **0.5 Make the simulator honest about bias**
+- [x] **0.5 Make the simulator honest about bias**
   - What: in `SimulatedPlayer` (`app/src/test/.../sync/sim/SimWorld.kt`), add a per-phone `reportBiasMs`: a constant difference between `positionMs` and what is heard (`positionMs = heard + reportBiasMs`), standing in for unreported output delay or a priming mismatch. `positionMs` is already rounded to whole ms; add an optional smoothing that mimics `currentPosition`. Add a sim test asserting that bias is invisible to the follower without calibration and removed after a simulated calibration. The follower's error is `positionMs − (timeline + calibrationMs)` (`PlaybackFollower.kt:371`), so cancelling needs `InMemoryLatencyProfile.calibrationMs = +reportBiasMs`.
   - Why: the current "≤ 4.4 ms" is measured against an unbiased reported position, so it is a lower bound on the real error.
   - Verify: the new `SyncSimulationTest` case, run with `./gradlew testDebugUnitTest`.
