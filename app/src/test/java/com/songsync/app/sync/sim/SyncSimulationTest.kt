@@ -1,6 +1,7 @@
 package com.songsync.app.sync.sim
 
 import com.google.common.truth.Truth.assertThat
+import com.songsync.app.calibration.CalibrationSignal
 import com.songsync.app.data.model.Track
 import com.songsync.app.data.model.TrackSource
 import com.songsync.app.sync.ClientCoordinator
@@ -176,6 +177,44 @@ class SyncSimulationTest {
             group.phones.joinToString { "%.1f/%d".format(it.latency.startLatencyMs, it.player.startLatencyMs) } +
             "; phases: " + group.phones.joinToString { "${it.follower.phase}" })
         assertThat(worst).isAtMost(5.0)
+    }
+
+    @Test
+    fun `starting the song after echo calibration is on time from the first sample`() = runTest {
+        val group = Group(this, seed = 42, clientCount = 2, config)
+        val calibration = CalibrationSignal.track(3)
+        // The calibration WAV starts faster than a streamed song, by a different amount per phone.
+        group.phones.forEachIndexed { i, phone ->
+            phone.follower.learnsFromTrack = { !CalibrationSignal.isCalibrationKey(it) }
+            val fast = (phone.player.startLatencyMs - 40 - 15 * i).coerceAtLeast(5)
+            phone.player.trackStartLatencyMs = { key -> fast.takeIf { CalibrationSignal.isCalibrationKey(key) } }
+        }
+        startPlaying(group)
+        advanceTimeBy(10_000)
+        repeat(3) { // learn the song's start latency
+            group.host.pause()
+            advanceTimeBy(3_000)
+            group.host.play()
+            advanceTimeBy(4_000)
+        }
+
+        // Auto-calibrate: two runs of the calibration track, then the song is put back, paused.
+        val songPositionMs = group.host.positionMs()
+        repeat(2) {
+            group.host.playNow(calibration)
+            advanceTimeBy(8_000)
+            group.host.pause()
+            advanceTimeBy(1_500)
+        }
+        group.host.playNow(track, songPositionMs, autoPlay = false)
+        advanceTimeBy(4_000)
+        group.host.play()
+        advanceTimeBy(1_500) // lead time + start, before closed-loop corrections act
+
+        val errors = group.errorsMs()
+        println("error ~1 s after the first start after calibration: ${errors.joinToString { "%.1f".format(it) }}; " +
+            "latency learned/true: " + group.phones.joinToString { "%.1f/%d".format(it.latency.startLatencyMs, it.player.startLatencyMs) })
+        assertThat(errors.maxOf { abs(it) }).isAtMost(5.0)
     }
 
     @Test

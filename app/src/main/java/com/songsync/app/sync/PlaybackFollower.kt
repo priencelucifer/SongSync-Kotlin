@@ -113,6 +113,13 @@ class PlaybackFollower(
             if (value) resetSpeed()
         }
 
+    /**
+     * Whether starts of a track teach the learned start latency. The echo-calibration track (a
+     * local 48 kHz mono WAV) starts on a different audio path than streamed songs; learning from
+     * it put the first song start after a calibration tens of ms off for several seconds.
+     */
+    var learnsFromTrack: (trackKey: String?) -> Boolean = { true }
+
     private var offsetTargetNs: Long? = null
     private var appliedOffsetNs = 0L
     private var hold = false
@@ -357,7 +364,7 @@ class PlaybackFollower(
             return
         }
         // Only a start from exactly the prepared position says anything about start latency.
-        learnFromStart = abs(player.positionMs - target) <= config.positionToleranceMs
+        learnFromStart = abs(player.positionMs - target) <= config.positionToleranceMs && learnsFromTrack(state.trackKey)
         emit(SyncEvent.Type.START, latency.startLatencyMs)
         player.play()
         lastStartNs = clock.nowNs()

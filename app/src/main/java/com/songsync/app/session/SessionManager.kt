@@ -240,6 +240,7 @@ class SessionManager(
     init {
         engine.onStateChanged = { follower.onPlayerChanged() }
         follower.onEvent = { event -> log(describe(event)) }
+        follower.learnsFromTrack = { !CalibrationSignal.isCalibrationKey(it) }
         scope.launch { routes.route.collect { latency.switchTo(it) } }
         scope.launch {
             onHold.collect { hold ->

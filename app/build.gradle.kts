@@ -24,8 +24,8 @@ android {
         applicationId = "com.songsync.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "2.3.4"
+        versionCode = 12
+        versionName = "2.3.5"
     }
 
     signingConfigs {

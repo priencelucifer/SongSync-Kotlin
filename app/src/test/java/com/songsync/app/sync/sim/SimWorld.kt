@@ -84,6 +84,13 @@ class SimulatedPlayer(
     var durationMs = 600_000L
     override var loadedTrackKey: String? = null
         private set
+
+    /**
+     * Start latency of particular tracks, when it differs from [startLatencyMs]: a local 48 kHz
+     * mono WAV (the echo-calibration track) takes a different audio path than a streamed song.
+     */
+    var trackStartLatencyMs: (String?) -> Long? = { null }
+    private val currentStartLatencyMs get() = trackStartLatencyMs(loadedTrackKey) ?: startLatencyMs
     override var speed = 1f
         private set
     override val isInterrupted = false
@@ -134,7 +141,7 @@ class SimulatedPlayer(
         if (waitingForData && buffered() - basePos >= neededAheadMs) {
             waitingForData = false
             if (playWhenReady) {
-                audibleFromMs = trueMs() + startLatencyMs
+                audibleFromMs = trueMs() + currentStartLatencyMs
                 glitchFromMs = audibleFromMs
             }
         }
@@ -180,7 +187,7 @@ class SimulatedPlayer(
         playWhenReady = true
         plays++
         if (!waitingForData) {
-            audibleFromMs = max(trueMs(), readyAtMs) + startLatencyMs + startJitterMs()
+            audibleFromMs = max(trueMs(), readyAtMs) + currentStartLatencyMs + startJitterMs()
             glitchFromMs = audibleFromMs
         }
     }
@@ -204,7 +211,7 @@ class SimulatedPlayer(
             readyAtMs = trueMs() + seekReadyMs
         }
         if (playWhenReady && !waitingForData) {
-            audibleFromMs = readyAtMs + startLatencyMs
+            audibleFromMs = readyAtMs + currentStartLatencyMs
             glitchFromMs = audibleFromMs
         }
     }
