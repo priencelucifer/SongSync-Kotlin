@@ -16,3 +16,6 @@ keystore.properties
 .idea/
 *.iml
 .DS_Store
+
+# Raw research notes (the synthesized report lives in reports/)
+research_notes/
