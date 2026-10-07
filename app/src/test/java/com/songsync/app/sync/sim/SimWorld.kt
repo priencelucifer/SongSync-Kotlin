@@ -65,6 +65,18 @@ class SimulatedPlayer(
     /** Reported-position error right after audio starts, decaying to 0 over [glitchDurationMs]. */
     private val startGlitchMs: Double = 0.0,
     private val glitchDurationMs: Long = 800,
+    /**
+     * Constant gap between the reported position and what is heard while playing
+     * (reported = heard + bias): output delay the platform does not report, such as speaker DSP or
+     * a Bluetooth sink. The follower cannot see it; only acoustic calibration can.
+     */
+    private val reportBiasMs: Double = 0.0,
+    /**
+     * 0 = independent noise per read. Closer to 1 = slowly wandering noise (each read moves only
+     * this much of the way to a fresh sample), like a smoothed position that a median cannot
+     * average away.
+     */
+    private val noiseSmoothing: Double = 0.0,
 ) : SyncPlayer {
     private val audioRate = 1.0 + audioPpm / 1e6
     var durationMs = 600_000L
@@ -145,6 +157,8 @@ class SimulatedPlayer(
         else minOf(durationMs.toDouble(), basePos + (now - audibleFromMs) * speed * audioRate)
     }
 
+    private var noise = 0.0
+
     override val positionMs: Long
         get() {
             val heard = truePositionMs()
@@ -155,7 +169,8 @@ class SimulatedPlayer(
             } else {
                 0.0
             }
-            return (heard + glitch + noiseMs()).roundToLong()
+            noise = noiseSmoothing * noise + (1 - noiseSmoothing) * noiseMs()
+            return (heard + reportBiasMs + glitch + noise).roundToLong()
         }
 
     override fun play() {
@@ -291,6 +306,8 @@ class SimPhone(
     loadDelayMs: Long = random.nextLong(300, 2_500),
     startGlitchMs: Double = 0.0,
     glitchDurationMs: Long = 800,
+    reportBiasMs: Double = 0.0,
+    noiseSmoothing: Double = 0.0,
 ) {
     private val trueMs = { scope.testScheduler.currentTime }
     val clock = DeviceClock(trueMs, clockOffsetMs * 1_000_000, clockPpm)
@@ -299,6 +316,8 @@ class SimPhone(
         noiseMs = { random.nextDouble(-1.5, 1.5) },
         startGlitchMs = startGlitchMs,
         glitchDurationMs = glitchDurationMs,
+        reportBiasMs = reportBiasMs,
+        noiseSmoothing = noiseSmoothing,
     )
     val latency = InMemoryLatencyProfile()
     val follower = PlaybackFollower(player, clock, VirtualScheduler(scope.backgroundScope, clock), config, latency)

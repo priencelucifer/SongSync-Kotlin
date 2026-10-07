@@ -35,10 +35,14 @@ class SyncSimulationTest {
         latency: LatencyModel = LatencyModel(),
         private val glitchMs: Double = 0.0,
         private val glitchDurationMs: Long = 800,
+        private val noiseSmoothing: Double = 0.0,
     ) {
         val random = Random(seed)
         val network = FakeNetwork(scope, random, latency)
-        val hostPhone = SimPhone("host", scope, network, random, config, startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs)
+        val hostPhone = SimPhone(
+            "host", scope, network, random, config,
+            startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs, noiseSmoothing = noiseSmoothing,
+        )
         val host = HostCoordinator(scope.backgroundScope, hostPhone.endpoint, hostPhone.clock, hostPhone.local, "Host", "session")
         val clients = mutableListOf<Pair<SimPhone, ClientCoordinator>>()
 
@@ -47,8 +51,16 @@ class SyncSimulationTest {
             repeat(clientCount) { addClient("client${it + 1}") }
         }
 
-        fun addClient(name: String, downloadRateX: Double = Double.POSITIVE_INFINITY): Pair<SimPhone, ClientCoordinator> {
-            val phone = SimPhone(name, scope, network, random, config, startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs)
+        fun addClient(
+            name: String,
+            downloadRateX: Double = Double.POSITIVE_INFINITY,
+            reportBiasMs: Double = 0.0,
+        ): Pair<SimPhone, ClientCoordinator> {
+            val phone = SimPhone(
+                name, scope, network, random, config,
+                startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs,
+                reportBiasMs = reportBiasMs, noiseSmoothing = noiseSmoothing,
+            )
             phone.player.downloadRateX = downloadRateX
             val client = ClientCoordinator(scope.backgroundScope, phone.endpoint, phone.clock, phone.local, name, "test")
             network.connect("host", name)
@@ -106,6 +118,21 @@ class SyncSimulationTest {
         }
         if (worst > 3.0) println("  worst: $worstAt")
         return worst
+    }
+
+    /** Mean heard error of one phone over [durationMs] of virtual time. */
+    private fun TestScope.meanErrorOver(group: Group, phone: SimPhone, durationMs: Long): Double {
+        var sum = 0.0
+        var n = 0
+        var t = 0L
+        while (t < durationMs) {
+            advanceTimeBy(250)
+            runCurrent()
+            t += 250
+            sum += group.errorsMs(listOf(phone)).single()
+            n++
+        }
+        return sum / n
     }
 
     @Test
@@ -272,6 +299,38 @@ class SyncSimulationTest {
             // Only crystal drift moves a frozen phone: a few ms over 20 s at most.
             assertThat(group.errorsMs()[i] - before[i]).isWithin(3.0).of(0.0)
         }
+    }
+
+    @Test
+    fun `unreported output delay is invisible to the loop until calibration cancels it`() = runTest {
+        // A phone whose sound leaves the speaker 12 ms after its reported position (speaker DSP).
+        val group = Group(this, seed = 3, clientCount = 1, config)
+        val (biased, _) = group.addClient("biased", reportBiasMs = 12.0)
+        startPlaying(group)
+        advanceTimeBy(15_000)
+
+        val heardBefore = meanErrorOver(group, biased, 10_000)
+        val reported = biased.follower.status.errorMs!!
+        println("uncalibrated: heard ${"%.1f".format(heardBefore)} ms, follower reports ${"%.1f".format(reported)} ms")
+        // Listeners hear it late (bias plus whatever the loop leaves inside its dead-band)...
+        assertThat(heardBefore).isWithin(config.deadbandMs).of(-12.0)
+        assertThat(abs(reported)).isAtMost(config.deadbandMs) // ...while the loop believes it is in sync
+
+        biased.latency.calibrationMs = 12.0 // what echo calibration measures for this phone
+        advanceTimeBy(10_000)
+        assertThat(worstErrorOver(group, 20_000)).isAtMost(5.0)
+    }
+
+    @Test
+    fun `slowly wandering position reports still stay echo-free`() = runTest {
+        // Reported positions that drift around instead of jittering independently (like a
+        // smoothed currentPosition): the window median can no longer average the noise away.
+        val group = Group(this, seed = 37, clientCount = 3, config, noiseSmoothing = 0.95)
+        startPlaying(group)
+        advanceTimeBy(15_000)
+        val worst = worstErrorOver(group, 90_000)
+        println("correlated report noise: worst error ${"%.2f".format(worst)} ms")
+        assertThat(worst).isAtMost(5.0)
     }
 
     @Test
