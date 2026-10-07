@@ -26,8 +26,8 @@
     <string name="error_playback">Playback stopped on this phone (%1$s)</string>
     <string name="error_playback_retrying">Network hiccup, reconnecting the stream…</string>
     <string name="error_location_off">Turn on Location in your phone\'s settings to find nearby phones</string>
-    <string name="error_permissions">SongSync is missing the Nearby devices permission (Nearby code %1$d). Allow it in the app settings and try again.</string>
-    <string name="error_permission_location">Finding groups needs the Location permission (Nearby code %1$d). Allow it in the app settings and try again.</string>
+    <string name="error_permissions">SongSync is missing the Nearby devices permission (Nearby code %1$d). Allow it in Settings → Permissions and try again.</string>
+    <string name="error_permission_location">Finding groups needs precise location (Nearby code %1$d). In Settings → Permissions → Location, choose “Allow only while using the app” and turn on “Use precise location”.</string>
     <string name="error_radio">Bluetooth or Wi-Fi is off or busy. Turn them on and try again.</string>
     <string name="error_nearby_busy">Another app is using Nearby right now. Close it and try again.</string>
     <string name="error_nearby">Nearby connection error: %1$s</string>
@@ -52,9 +52,9 @@
 
     <!-- Permissions -->
     <string name="permission_title">Allow nearby devices</string>
-    <string name="permission_rationale">SongSync connects phones directly over Bluetooth and Wi-Fi, which needs the Nearby devices permission. Google\'s Nearby service also requires approximate location to find other phones. SongSync never reads or stores your location.</string>
+    <string name="permission_rationale">SongSync connects phones directly over Bluetooth and Wi-Fi, which needs the Nearby devices permission. Google\'s Nearby service also requires location to find other phones: choose “Precise” when asked. SongSync never reads or stores your location.</string>
     <string name="permission_rationale_legacy">SongSync connects phones directly over Bluetooth and Wi-Fi. On this Android version that needs the precise Location permission. SongSync never reads or stores your location.</string>
-    <string name="permission_blocked">The permission was turned off for SongSync. Allow it in the app settings to connect phones.</string>
+    <string name="permission_blocked">Some permissions are off for SongSync. In the app settings, allow Nearby devices, and for Location allow it while using the app with “Use precise location” on.</string>
     <string name="permission_open_settings">Open settings</string>
     <string name="location_off_title">Turn on Location</string>
     <string name="location_off_text">On this Android version, phones can only find each other while Location is switched on.</string>

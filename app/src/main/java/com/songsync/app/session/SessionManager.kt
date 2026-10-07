@@ -55,7 +55,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 
 /** A message for the user, resolved against resources by the UI. */
-class UserMessage(@StringRes val text: Int, vararg val args: Any)
+class UserMessage(@StringRes val text: Int, vararg val args: Any, val action: Action? = null) {
+    /** A button on the message that takes the user where they can fix the problem. */
+    enum class Action { APP_SETTINGS, LOCATION_SETTINGS }
+}
 
 data class NowPlaying(
     val track: Track? = null,
@@ -541,16 +544,20 @@ class SessionManager(
         _messages.tryEmit(UserMessage(text, *args))
     }
 
+    private fun reportWithAction(action: UserMessage.Action, @StringRes text: Int, vararg args: Any) {
+        _messages.tryEmit(UserMessage(text, *args, action = action))
+    }
+
     private fun reportNearbyError(e: Exception) {
         val code = (e as? ApiException)?.statusCode
         when (code) {
             @Suppress("DEPRECATION") // still returned by older Play services versions
             ConnectionsStatusCodes.MISSING_SETTING_LOCATION_MUST_BE_ON,
-            -> report(R.string.error_location_off)
+            -> reportWithAction(UserMessage.Action.LOCATION_SETTINGS, R.string.error_location_off)
             // The code is included so a report from a user pinpoints exactly what Nearby rejected.
             ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_COARSE_LOCATION,
             ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_FINE_LOCATION,
-            -> report(R.string.error_permission_location, code)
+            -> reportWithAction(UserMessage.Action.APP_SETTINGS, R.string.error_permission_location, code)
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH,
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_ADMIN,
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_SCAN,
@@ -559,7 +566,7 @@ class SessionManager(
             ConnectionsStatusCodes.MISSING_PERMISSION_NEARBY_WIFI_DEVICES,
             ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_WIFI_STATE,
             ConnectionsStatusCodes.MISSING_PERMISSION_CHANGE_WIFI_STATE,
-            -> report(R.string.error_permissions, code)
+            -> reportWithAction(UserMessage.Action.APP_SETTINGS, R.string.error_permissions, code)
             ConnectionsStatusCodes.STATUS_RADIO_ERROR -> report(R.string.error_radio)
             ConnectionsStatusCodes.API_CONNECTION_FAILED_ALREADY_IN_USE -> report(R.string.error_nearby_busy)
             null -> report(R.string.error_nearby, e.message ?: e.javaClass.simpleName)

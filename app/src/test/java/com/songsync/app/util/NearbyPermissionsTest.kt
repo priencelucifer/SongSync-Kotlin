@@ -11,11 +11,10 @@ import org.junit.Test
 class NearbyPermissionsTest {
 
     @Test
-    fun `Android 13 and later need approximate location for discovery`() {
+    fun `Android 13 and later need precise location for discovery`() {
         for (sdk in 33..37) {
-            assertThat(NearbyPermissions.requiredFor(sdk)).containsAtLeast(BLUETOOTH_SCAN, NEARBY_WIFI_DEVICES, ACCESS_COARSE_LOCATION)
-            assertThat(NearbyPermissions.requiredFor(sdk)).doesNotContain(ACCESS_FINE_LOCATION)
-            assertThat(NearbyPermissions.toRequestFor(sdk)).contains(POST_NOTIFICATIONS)
+            assertThat(NearbyPermissions.requiredFor(sdk)).containsAtLeast(BLUETOOTH_SCAN, NEARBY_WIFI_DEVICES, ACCESS_FINE_LOCATION)
+            assertThat(NearbyPermissions.toRequestFor(sdk)).containsAtLeast(ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, POST_NOTIFICATIONS)
         }
     }
 

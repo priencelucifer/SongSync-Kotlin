@@ -1,5 +1,8 @@
 package com.songsync.app.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -15,8 +18,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,12 +34,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.songsync.app.R
 import com.songsync.app.session.SessionManager.State
+import com.songsync.app.session.UserMessage
 import com.songsync.app.ui.components.rememberPermissionGate
 import com.songsync.app.ui.home.HomeScreen
 import com.songsync.app.ui.join.JoinScreen
@@ -59,8 +66,24 @@ fun AppRoot(vm: AppViewModel) {
     val gate = rememberPermissionGate()
     val showMessage: (String) -> Unit = { text -> scope.launch { snackbar.showSnackbar(text) } }
 
+    val context = LocalContext.current
     LaunchedEffect(vm) {
-        vm.messages.collect { message -> snackbar.showSnackbar(resources.getString(message.text, *message.args)) }
+        vm.messages.collect { message ->
+            val action = message.action
+            val result = snackbar.showSnackbar(
+                message = resources.getString(message.text, *message.args),
+                actionLabel = action?.let { resources.getString(R.string.settings) },
+                duration = if (action != null) SnackbarDuration.Long else SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed && action != null) {
+                val intent = when (action) {
+                    UserMessage.Action.APP_SETTINGS ->
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    UserMessage.Action.LOCATION_SETTINGS -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                }
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
     }
 
     val inSession = state is State.Hosting || state is State.Joined || state is State.Reconnecting

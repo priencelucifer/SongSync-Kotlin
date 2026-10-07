@@ -16,9 +16,9 @@ object NearbyPermissions {
      * What must be granted before advertising/discovering.
      *
      * Android 13+: Google documents only the Bluetooth + Nearby Wi-Fi permissions, but Play
-     * services' discovery fails with MISSING_PERMISSION_ACCESS_COARSE_LOCATION (8034) unless
-     * approximate location is granted too (advertising works without it). SongSync never reads
-     * the location; it is only there so "Join a group" can find hosts.
+     * services' discovery fails with MISSING_PERMISSION_ACCESS_FINE_LOCATION (8036) or
+     * ..._COARSE_LOCATION (8034) unless precise location is granted (advertising works without it).
+     * SongSync never reads the location; it is only there so "Join a group" can find hosts.
      */
     @SuppressLint("InlinedApi") // gated on [sdk]; permission names are just strings on older versions
     fun requiredFor(sdk: Int): List<String> = when {
@@ -27,7 +27,7 @@ object NearbyPermissions {
             Manifest.permission.BLUETOOTH_ADVERTISE,
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.NEARBY_WIFI_DEVICES,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
         )
         sdk >= Build.VERSION_CODES.S -> listOf(
             Manifest.permission.BLUETOOTH_SCAN,
