@@ -89,6 +89,24 @@ class CalibrationAnalyzerTest {
     }
 
     @Test
+    fun `sync check reports each phone's lateness against the host`() {
+        val phones = listOf(Phone(0.0, 1.0), Phone(6.0, 0.3), Phone(-2.5, 0.4), Phone(0.0, 0.0))
+        val (recording, timeline) = record(phones, micDelayMs = 25.0)
+        val lateness = CalibrationAnalyzer.analyze(recording, timeline, phones.size).latenessVsHost()
+        assertThat(lateness.getValue(0)).isWithin(1e-9).of(0.0)
+        assertThat(lateness.getValue(1)).isWithin(0.3).of(6.0)
+        assertThat(lateness.getValue(2)).isWithin(0.3).of(-2.5)
+        assertThat(lateness[3]).isNull() // not heard: reported, not guessed
+    }
+
+    @Test
+    fun `sync check needs the host's own chirps as the reference`() {
+        val phones = listOf(Phone(0.0, 0.0), Phone(5.0, 0.5))
+        val (recording, timeline) = record(phones, micDelayMs = 25.0)
+        assertThat(CalibrationAnalyzer.analyze(recording, timeline, phones.size).latenessVsHost()).isEmpty()
+    }
+
+    @Test
     fun `nothing heard at all yields no corrections`() {
         val phones = listOf(Phone(0.0, 0.0), Phone(0.0, 0.0))
         val (recording, timeline) = record(phones, micDelayMs = 30.0)

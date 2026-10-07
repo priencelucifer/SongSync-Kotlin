@@ -34,6 +34,15 @@ object CalibrationAnalyzer {
             val reference = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
             return heard.associate { it.slot to (it.lateMs!! - reference).coerceIn(-maxMs, maxMs) }
         }
+
+        /**
+         * For "Check sync": how late each phone is heard compared with the host (slot 0), in ms,
+         * positive = late. Null for phones not heard reliably; empty if the host itself was not heard.
+         */
+        fun latenessVsHost(): Map<Int, Double?> {
+            val host = phones.firstOrNull { it.slot == 0 }?.lateMs ?: return emptyMap()
+            return phones.associate { it.slot to it.lateMs?.minus(host) }
+        }
     }
 
     private const val MIN_SNR = 6.0

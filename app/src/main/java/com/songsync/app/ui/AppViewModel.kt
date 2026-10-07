@@ -131,11 +131,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- echo calibration --------------------------------------------------------------------
 
-    /** Starts automatic echo calibration if the microphone permission is granted (the UI asks for it). */
-    fun autoCalibrate() {
+    /**
+     * Starts automatic echo calibration, or with [measureOnly] a sync check that changes nothing,
+     * if the microphone permission is granted (the UI asks for it).
+     */
+    fun autoCalibrate(measureOnly: Boolean = false) {
         val granted = ContextCompat.checkSelfPermission(getApplication(), Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
-        if (granted) session.autoCalibrate()
+        if (granted) session.autoCalibrate(measureOnly)
     }
 
     fun cancelCalibration() = session.cancelCalibration()

@@ -25,17 +25,20 @@ import com.songsync.app.session.CalibrationUi
 import com.songsync.app.ui.AppViewModel
 import kotlin.math.roundToInt
 
-/** Returns an action that asks for the microphone if needed, then starts auto-calibration. */
+/**
+ * Returns an action that asks for the microphone if needed, then starts auto-calibration (or,
+ * with [measureOnly], a sync check that only measures).
+ */
 @Composable
-fun rememberCalibrationStarter(vm: AppViewModel, onDenied: () -> Unit): () -> Unit {
+fun rememberCalibrationStarter(vm: AppViewModel, measureOnly: Boolean = false, onDenied: () -> Unit): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) vm.autoCalibrate() else onDenied()
+        if (granted) vm.autoCalibrate(measureOnly) else onDenied()
     }
-    return remember(vm, launcher) {
+    return remember(vm, launcher, measureOnly) {
         {
             val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-            if (granted) vm.autoCalibrate() else launcher.launch(Manifest.permission.RECORD_AUDIO)
+            if (granted) vm.autoCalibrate(measureOnly) else launcher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 }
@@ -66,7 +69,7 @@ fun CalibrationDialog(state: CalibrationUi, onCancel: () -> Unit, onDismiss: () 
             confirmButton = {},
             dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } },
         )
-        is CalibrationUi.Done -> AlertDialog(
+        is CalibrationUi.Done -> if (state.measureOnly) SyncCheckResult(state, onDismiss) else AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(R.string.calibration_done_title)) },
             text = {
@@ -97,4 +100,43 @@ fun CalibrationDialog(state: CalibrationUi, onCancel: () -> Unit, onDismiss: () 
             confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
         )
     }
+}
+
+/** "Check sync" results: how late each phone is heard here, and the overall spread. */
+@Composable
+private fun SyncCheckResult(state: CalibrationUi.Done, onDismiss: () -> Unit) {
+    val heard = state.outcomes.mapNotNull { it.correctionMs }
+    val spread = if (heard.size >= 2) heard.max() - heard.min() else 0.0
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.sync_check_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                state.outcomes.forEach { outcome ->
+                    val late = outcome.correctionMs
+                    Text(
+                        when {
+                            late == null -> stringResource(R.string.calibration_outcome_missing, outcome.name)
+                            outcome.isSelf -> stringResource(R.string.sync_check_self, outcome.name)
+                            else -> stringResource(R.string.sync_check_outcome, outcome.name, late)
+                        },
+                    )
+                }
+                Text(stringResource(R.string.sync_check_spread, spread), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(
+                        when {
+                            spread <= 2.0 -> R.string.sync_check_excellent
+                            spread <= 5.0 -> R.string.sync_check_good
+                            spread <= 10.0 -> R.string.sync_check_ok
+                            else -> R.string.sync_check_bad
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
+    )
 }

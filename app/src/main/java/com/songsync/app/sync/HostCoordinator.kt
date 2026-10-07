@@ -122,7 +122,8 @@ class HostCoordinator(
 
     // --- commands from the UI ----------------------------------------------------------------
 
-    fun playNow(track: Track) {
+    /** Loads [track] on every phone and starts it at [positionMs] (or stays paused there). */
+    fun playNow(track: Track, positionMs: Long = 0, autoPlay: Boolean = true) {
         loadJob?.cancel()
         loadJob = scope.launch {
             _loading.value = track
@@ -132,8 +133,8 @@ class HostCoordinator(
                 _track.value = t
                 val expected = _peers.value.keys.toSet()
                 broadcast(LoadTrack(t))
-                // Everyone holds at 0 until the ready barrier releases.
-                publish(PlaybackState(++seq, t.key, playing = false, anchorHostNs = clock.nowNs(), anchorPositionMs = 0))
+                // Everyone holds at the start position until the ready barrier releases.
+                publish(PlaybackState(++seq, t.key, playing = false, anchorHostNs = clock.nowNs(), anchorPositionMs = positionMs))
                 local.prepare(resolved)
                 withTimeoutOrNull(config.readyTimeoutMs) {
                     _peers.first { peers ->
@@ -144,7 +145,9 @@ class HostCoordinator(
                     }
                 }
                 // Phones that missed the barrier simply join the running timeline once ready.
-                publish(PlaybackState(++seq, t.key, playing = true, anchorHostNs = clock.nowNs() + leadNs(), anchorPositionMs = 0))
+                if (autoPlay) {
+                    publish(PlaybackState(++seq, t.key, playing = true, anchorHostNs = clock.nowNs() + leadNs(), anchorPositionMs = positionMs))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

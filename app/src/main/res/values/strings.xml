@@ -135,6 +135,15 @@
     <string name="calibration_not_heard_here">The host couldn\'t hear this phone during calibration. Turn up its volume and try again.</string>
     <string name="calibration_current">Echo correction for %1$s: %2$+d ms</string>
     <string name="calibration_busy">Calibrating, one moment…</string>
+    <string name="sync_check_button">Check sync</string>
+    <string name="sync_check_title">Sync check</string>
+    <string name="sync_check_self">%1$s (this phone): reference</string>
+    <string name="sync_check_outcome">%1$s: %2$+.1f ms (positive = late)</string>
+    <string name="sync_check_spread">Spread: %1$.1f ms</string>
+    <string name="sync_check_excellent">Excellent: the phones sound like one speaker. Nothing was changed.</string>
+    <string name="sync_check_good">Good: tight enough for music. Nothing was changed.</string>
+    <string name="sync_check_ok">Acceptable, but an echo may be audible on sharp sounds. Nothing was changed; try Auto-calibrate echo.</string>
+    <string name="sync_check_bad">Audible echo. Nothing was changed; try Auto-calibrate echo, then check again.</string>
     <string name="settings_calibration_manual">Echo calibration (advanced)</string>
     <string name="settings_calibration_manual_hint">Set automatically by “Auto-calibrate echo” on the host. Fine-tune only if this phone still sounds early or late.</string>
 

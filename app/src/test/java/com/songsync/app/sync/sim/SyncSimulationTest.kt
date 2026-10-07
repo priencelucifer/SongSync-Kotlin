@@ -334,6 +334,22 @@ class SyncSimulationTest {
     }
 
     @Test
+    fun `a song can be put back paused where it was, then resumed in sync`() = runTest {
+        // What happens after a calibration or sync check: the previous song returns, paused.
+        val group = Group(this, seed = 41, clientCount = 2, config)
+        group.host.playNow(track, positionMs = 42_000, autoPlay = false)
+        advanceTimeBy(10_000)
+        assertThat(group.host.state.value.playing).isFalse()
+        group.phones.forEach {
+            assertThat(it.player.isPlaying).isFalse()
+            assertThat(it.player.truePositionMs()).isWithin(5.0).of(42_000.0)
+        }
+        group.host.play()
+        advanceTimeBy(8_000)
+        assertThat(worstErrorOver(group, 10_000)).isAtMost(5.0)
+    }
+
+    @Test
     fun `host advances to the next queued track when one ends`() = runTest {
         val group = Group(this, seed = 5, clientCount = 1, config)
         group.phones.forEach { it.player.durationMs = 20_000 }

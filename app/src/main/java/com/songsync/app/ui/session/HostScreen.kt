@@ -103,6 +103,9 @@ fun HostScreen(
     val startCalibration = rememberCalibrationStarter(vm) {
         onMessage(resources.getString(R.string.calibration_mic_denied))
     }
+    val startSyncCheck = rememberCalibrationStarter(vm, measureOnly = true) {
+        onMessage(resources.getString(R.string.calibration_mic_denied))
+    }
 
     // After process death the text field is restored but the ViewModel is new.
     LaunchedEffect(Unit) { vm.onQueryChange(query) }
@@ -142,6 +145,14 @@ fun HostScreen(
                                 onClick = {
                                     menuOpen = false
                                     startCalibration()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sync_check_button)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_graphic_eq), contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    startSyncCheck()
                                 },
                             )
                             DropdownMenuItem(

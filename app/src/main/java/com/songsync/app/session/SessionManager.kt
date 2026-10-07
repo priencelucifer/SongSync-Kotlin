@@ -15,6 +15,7 @@ import com.songsync.app.R
 import com.songsync.app.data.SettingsStore
 import com.songsync.app.data.TrackResolver
 import com.songsync.app.data.model.Track
+import com.songsync.app.data.model.TrackSource
 import com.songsync.app.data.source.ClickTrack
 import com.songsync.app.net.DiscoveredHost
 import com.songsync.app.net.EndpointInfo
@@ -101,7 +102,8 @@ data class PeerUi(
 sealed interface CalibrationUi {
     data object Idle : CalibrationUi
     data class Running(val stage: Stage) : CalibrationUi
-    data class Done(val outcomes: List<CalibrationOutcome>) : CalibrationUi
+    /** With [measureOnly], outcomes hold each phone's lateness vs this phone instead of a correction. */
+    data class Done(val outcomes: List<CalibrationOutcome>, val measureOnly: Boolean = false) : CalibrationUi
     data class Failed(@StringRes val reason: Int) : CalibrationUi
 
     enum class Stage { STARTING, LISTENING, ANALYZING }
@@ -332,11 +334,17 @@ class SessionManager(
      * Automatic echo calibration (host). Every phone plays the calibration track in sync but is
      * only audible during its own slot; this phone's microphone records the whole run and the
      * measured lateness of each phone becomes its correction. The UI checks RECORD_AUDIO first.
+     *
+     * With [measureOnly] ("Check sync") nothing is corrected: the result is how late each phone
+     * is heard relative to this one, with the current calibration in effect. Afterwards the song
+     * that was loaded is put back, paused where it was.
      */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    fun autoCalibrate() {
+    fun autoCalibrate(measureOnly: Boolean = false) {
         val host = _host.value ?: return
         if (calibrating) return
+        val previousTrack = host.track.value?.takeIf { it.source != TrackSource.CLICK_TEST || it == ClickTrack.TRACK }
+        val previousPositionMs = host.positionMs()
         calibrationJob = scope.launch {
             _calibration.value = CalibrationUi.Running(CalibrationUi.Stage.STARTING)
             val peers = host.peers.value.values.sortedBy { it.name }.take(CalibrationSignal.MAX_SLOTS - 1)
@@ -373,6 +381,23 @@ class SessionManager(
                 finished = true
 
                 _calibration.value = CalibrationUi.Running(CalibrationUi.Stage.ANALYZING)
+                if (measureOnly) {
+                    val measured = withContext(Dispatchers.Default) { CalibrationAnalyzer.analyze(audio, timeline, slots) }
+                    val lateness = measured.latenessVsHost()
+                    val outcomes = listOf(CalibrationOutcome(deviceName, isSelf = true, lateness[0])) +
+                        peers.mapIndexed { index, peer -> CalibrationOutcome(peer.name, isSelf = false, lateness[index + 1]) }
+                    val heard = outcomes.mapNotNull { it.correctionMs }
+                    if (heard.size < 2) {
+                        _calibration.value = CalibrationUi.Failed(R.string.calibration_failed_nothing)
+                        return@launch
+                    }
+                    log(
+                        "sync check: " + outcomes.joinToString { o -> "${o.name} ${o.correctionMs?.let { "%+.1f ms".format(it) } ?: "not heard"}" } +
+                            "; spread %.1f ms".format(heard.max() - heard.min()),
+                    )
+                    _calibration.value = CalibrationUi.Done(outcomes, measureOnly = true)
+                    return@launch
+                }
                 // A phone still mid-way through a timing correction would have that baked in;
                 // its own reported sync error (positive = ahead, i.e. sounding early) is removed.
                 val trackingErrorMs = mapOf(0 to (follower.status.errorMs ?: 0.0)) +
@@ -397,7 +422,13 @@ class SessionManager(
             } finally {
                 withContext(NonCancellable) {
                     if (!finished) withContext(Dispatchers.IO) { recording.stop() }
-                    if (host.state.value.trackKey == track.key) host.pause()
+                    if (host.state.value.trackKey == track.key) {
+                        if (previousTrack != null) {
+                            host.playNow(previousTrack, previousPositionMs, autoPlay = false)
+                        } else {
+                            host.pause()
+                        }
+                    }
                 }
             }
         }
