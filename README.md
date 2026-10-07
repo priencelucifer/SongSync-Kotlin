@@ -13,7 +13,7 @@ This is a native Kotlin rewrite of the Flutter app [SirEthic/SongSync](https://g
 |---|---|
 | Sync used relative `Future.delayed` timers on the UI thread and RTT/2 averaged over 5 pings with the wall clock | NTP-style clock-offset estimation on the monotonic clock, filtered to the fastest round trips |
 | No drift correction once playing; a rebuffer meant permanent echo | Closed loop every 100 ms: tiny speed nudges for small drift, re-sync for large drift |
-| Device start latency only fixable by a manual slider that wasn't saved | Start latency is learned per phone and per audio output and persisted; manual calibration is kept and saved too |
+| Device start latency only fixable by a manual slider that wasn't saved | Start latency is learned per phone and per audio output; the remaining speaker/Bluetooth delay is measured acoustically by **Auto-calibrate echo** |
 | UI jank: whole screen rebuilt on every ping, hidden player rebuilt constantly and crashing on null, seek on every drag tick | Compose with isolated position polling (4 Hz, only where shown), seek on release |
 | Only one client; host stopped advertising after the first join; auto-joined the first host seen | Any number of phones, pick-a-host list, phones can join or rejoin at any time |
 | No reconnect | Clients keep playing on the last known timeline and reconnect automatically for 60 s |
@@ -35,6 +35,14 @@ This is a native Kotlin rewrite of the Flutter app [SirEthic/SongSync](https://g
 4. **Closed loop.** While playing, each phone compares ExoPlayer's position (derived from AudioTrack
    timestamps, i.e. what is being heard) with the timeline: under 4 ms nothing happens, up to 120 ms it
    adjusts playback speed by up to ±2 %, beyond that it re-syncs.
+
+5. **Auto-calibrate echo.** Some delay happens after the audio leaves the app (speaker DSP, Bluetooth)
+   and phones often misreport it. On the host's request every phone plays a chirp track in sync, but each
+   phone is only audible in its own slot; the host's microphone records the run, a matched filter finds
+   each chirp's arrival to a fraction of a millisecond (first arrival, so reflections don't fool it), and
+   each phone's measured lateness becomes its correction, saved per speaker/headphones. Timing corrections
+   freeze while chirps play. The recording stays in memory for ~15 s and is never stored or sent. A manual
+   fine-tune remains under Settings → Echo calibration (advanced).
 
 In the whole-stack simulation (random clock offsets of ±200 ms, ±50 ppm clock drift, 40–150 ms audio
 start latency, jittery network with spikes) every phone stays within **5 ms** of the timeline
@@ -75,6 +83,8 @@ generated `app/src/release/generated/baselineProfiles/`. Makes the first launch 
 - `sync/` – clock sync, timeline, drift controller, and `SyncSimulationTest`, which runs a host and
   several clients with simulated clocks, audio hardware and network, asserting on what a listener would hear:
   convergence, pause/seek/resume, a late joiner, a dropped link, queue auto-advance.
+- `calibration/` – chirp detection and per-phone offsets from synthetic recordings (mic delay, loudness,
+  louder-than-direct reflections, noise, unheard phones): offsets recovered within 0.3 ms.
 - `data/` – JioSaavn decryption (FIPS DES vector + a real payload), parsing, click track, downloader cancellation.
 - `net/` – protocol round trips, endpoint info.
 - Live smoke tests against the real services are opt-in: `./gradlew testDebugUnitTest -PliveTests`.
@@ -85,9 +95,9 @@ Nearby Connections does not work in the emulator, so final checks need two or mo
 
 1. Host on one phone, join from the list on the others. Play, pause, seek, skip.
 2. Settings → Sync diagnostics: the sync error should stay within about ±10 ms.
-3. Host menu → **Play sync test** (a generated click track). Record the phones with a laptop mic and measure
-   the gap between clicks in Audacity: the target is ≤ 20 ms (inaudible as echo). Use the echo calibration
-   slider for phones or Bluetooth speakers that remain early/late.
+3. Host → **Auto-calibrate echo** (phones in place, volume up, room quiet), then **Play sync test**. Record the
+   phones with a laptop mic and measure the gap between clicks in Audacity: the target is ≤ 20 ms (inaudible
+   as echo).
 4. Lock the screens for 10 minutes: playback continues.
 5. Turn Wi-Fi/Bluetooth off and on on a client: it keeps playing, rejoins, and re-syncs.
 6. Join mid-song; take a phone call on a client (it pauses and re-syncs afterwards).

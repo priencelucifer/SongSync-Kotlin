@@ -157,6 +157,11 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
         }
     }
 
+    /** Local output volume (0..1); used to make only one phone audible at a time during calibration. */
+    fun setVolume(volume: Float) {
+        if (player.volume != volume) player.volume = volume
+    }
+
     fun clearSystemHold() {
         _systemHold.value = false
     }
@@ -166,6 +171,7 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
         player.stop()
         player.clearMediaItems()
         player.setPlaybackSpeed(1f)
+        player.volume = 1f
         onStateChanged?.invoke()
     }
 

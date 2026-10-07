@@ -259,6 +259,22 @@ class SyncSimulationTest {
     }
 
     @Test
+    fun `while calibration measures, timing is frozen and nothing moves`() = runTest {
+        val group = Group(this, seed = 29, clientCount = 2, config)
+        startPlaying(group)
+        advanceTimeBy(15_000)
+        val before = group.errorsMs()
+        group.phones.forEach { it.follower.correctionsFrozen = true }
+        advanceTimeBy(20_000)
+        group.phones.forEachIndexed { i, phone ->
+            assertThat(phone.player.speed).isEqualTo(1f)
+            assertThat(phone.follower.status.hardResyncs).isEqualTo(0)
+            // Only crystal drift moves a frozen phone: a few ms over 20 s at most.
+            assertThat(group.errorsMs()[i] - before[i]).isWithin(3.0).of(0.0)
+        }
+    }
+
+    @Test
     fun `host advances to the next queued track when one ends`() = runTest {
         val group = Group(this, seed = 5, clientCount = 1, config)
         group.phones.forEach { it.player.durationMs = 20_000 }

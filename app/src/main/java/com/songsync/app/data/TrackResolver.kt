@@ -1,5 +1,6 @@
 package com.songsync.app.data
 
+import com.songsync.app.calibration.CalibrationSignal
 import com.songsync.app.data.model.ResolvedTrack
 import com.songsync.app.data.model.Track
 import com.songsync.app.data.model.TrackSource
@@ -16,7 +17,9 @@ class TrackResolver(
 ) {
     suspend fun resolve(track: Track, allowAlternatives: Boolean): ResolvedTrack = when (track.source) {
         TrackSource.CLICK_TEST -> withContext(Dispatchers.IO) {
-            ResolvedTrack(track, ClickTrack.file(cacheDir).toURI().toString())
+            val slots = CalibrationSignal.slotsOf(track)
+            val file = if (slots != null) CalibrationSignal.file(cacheDir, slots) else ClickTrack.file(cacheDir)
+            ResolvedTrack(track, file.toURI().toString())
         }
         else -> sources.getValue(track.source).resolve(track, allowAlternatives)
     }

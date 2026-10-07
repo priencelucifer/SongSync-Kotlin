@@ -2,6 +2,8 @@ package com.songsync.app.sync
 
 import com.songsync.app.data.model.Track
 import com.songsync.app.net.Bye
+import com.songsync.app.net.CalibrationPlan
+import com.songsync.app.net.CalibrationResult
 import com.songsync.app.net.ClientStatus
 import com.songsync.app.net.Hello
 import com.songsync.app.net.LoadTrack
@@ -60,6 +62,8 @@ class ClientCoordinator(
         data class Rejected(val reason: RejectReason) : Event
         /** The host ended the session on purpose. */
         data object HostLeft : Event
+        /** Echo calibration finished; add [correctionMs] to this phone's calibration (null = not heard). */
+        data class Calibrated(val correctionMs: Double?) : Event
     }
 
     val clockSync = ClockSync()
@@ -76,6 +80,10 @@ class ClientCoordinator(
     /** Nearby link quality to the host (BandwidthInfo.Quality: 1 low/Bluetooth .. 3 high), if reported. */
     private val _linkQuality = MutableStateFlow<Int?>(null)
     val linkQuality: StateFlow<Int?> = _linkQuality.asStateFlow()
+
+    /** This phone's slot in an echo-calibration track: (track key, slot). */
+    private val _calibrationSlot = MutableStateFlow<Pair<String, Int>?>(null)
+    val calibrationSlot: StateFlow<Pair<String, Int>?> = _calibrationSlot.asStateFlow()
 
     private val _loadStatus = MutableStateFlow<LoadStatus>(LoadStatus.Idle)
     val loadStatus: StateFlow<LoadStatus> = _loadStatus.asStateFlow()
@@ -160,6 +168,8 @@ class ClientCoordinator(
             is LoadTrack -> load(message.track)
             is StateUpdate -> applyState(message.state)
             is Reject -> _events.tryEmit(Event.Rejected(message.reason))
+            is CalibrationPlan -> _calibrationSlot.value = message.trackKey to message.slot
+            is CalibrationResult -> _events.tryEmit(Event.Calibrated(message.correctionMs))
             Bye -> _events.tryEmit(Event.HostLeft)
             else -> Unit
         }

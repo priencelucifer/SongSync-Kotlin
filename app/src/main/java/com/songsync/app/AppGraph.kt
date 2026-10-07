@@ -1,6 +1,7 @@
 package com.songsync.app
 
 import android.app.Application
+import com.songsync.app.calibration.MicRecorder
 import com.songsync.app.data.SearchRepository
 import com.songsync.app.data.SettingsStore
 import com.songsync.app.data.TrackResolver
@@ -73,6 +74,7 @@ class AppGraph(app: Application) {
         clock = SystemMonotonicClock,
         scheduler = AndroidScheduler(),
         appVersion = BuildConfig.VERSION_NAME,
+        recorder = MicRecorder(app),
     )
 
     /** Shared by every MediaSession the service creates, so listeners are not leaked. */

@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.songsync.app.R
 import com.songsync.app.session.SessionManager.State
 import com.songsync.app.session.UserMessage
+import com.songsync.app.ui.components.CalibrationDialog
 import com.songsync.app.ui.components.rememberPermissionGate
 import com.songsync.app.ui.home.HomeScreen
 import com.songsync.app.ui.join.JoinScreen
@@ -145,7 +146,7 @@ fun AppRoot(vm: AppViewModel) {
             enter = slideInVertically(tween(300)) { it } + fadeIn(tween(300)),
             exit = slideOutVertically(tween(250)) { it } + fadeOut(tween(250)),
         ) {
-            HostPlayerScreen(vm, onCollapse = { playerExpanded = false })
+            HostPlayerScreen(vm, onCollapse = { playerExpanded = false }, onMessage = showMessage)
         }
 
         SnackbarHost(
@@ -157,6 +158,9 @@ fun AppRoot(vm: AppViewModel) {
                 .padding(bottom = if (route == Route.HOST && !playerExpanded) 72.dp else 0.dp),
         )
     }
+
+    val calibrationRun by vm.calibrationRun.collectAsStateWithLifecycle()
+    CalibrationDialog(calibrationRun, onCancel = vm::cancelCalibration, onDismiss = vm::dismissCalibration)
 
     if (confirmLeave) {
         val isHost = state is State.Hosting

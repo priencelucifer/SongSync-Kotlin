@@ -102,6 +102,17 @@ class PlaybackFollower(
     /** Receives [SyncEvent]s; optional. */
     var onEvent: ((SyncEvent) -> Unit)? = null
 
+    /**
+     * While echo calibration measures the phones, timing must not move: no speed nudges and no
+     * re-syncs (errors are still measured). Speed returns to normal when frozen.
+     */
+    var correctionsFrozen: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) resetSpeed()
+        }
+
     private var offsetTargetNs: Long? = null
     private var appliedOffsetNs = 0L
     private var hold = false
@@ -377,6 +388,7 @@ class PlaybackFollower(
         val median = drift.medianErrorMs()
         lastErrorMs = median
         trackCalm(median, nowLocal)
+        if (correctionsFrozen) return
         when (val decision = drift.decide(nowLocal)) {
             DriftController.Decision.Wait -> Unit
             is DriftController.Decision.Speed -> applySpeed(decision.speed)

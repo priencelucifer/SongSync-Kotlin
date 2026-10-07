@@ -32,6 +32,9 @@
         tools:targetApi="33" />
     <!-- When raising targetSdk to 37+: Nearby also needs ACCESS_LOCAL_NETWORK (runtime) for Wi-Fi LAN. -->
 
+    <!-- Automatic echo calibration: the host listens to the phones' chirps for ~15 s (never stored) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Keeps playback and the group connection alive with the screen off -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

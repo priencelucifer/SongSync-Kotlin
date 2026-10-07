@@ -1,6 +1,9 @@
 package com.songsync.app.ui
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.songsync.app.SongSyncApp
@@ -41,6 +44,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val peers = session.peers
     val onHold = session.onHold
     val stats = session.stats
+    val calibrationRun = session.calibration
     val syncLog = session.syncLog
     val messages = session.messages
     val calibration = graph.latency.calibration
@@ -124,6 +128,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun positionMs(): Long = session.positionMs()
     fun durationMs(): Long = session.durationMs()
+
+    // --- echo calibration --------------------------------------------------------------------
+
+    /** Starts automatic echo calibration if the microphone permission is granted (the UI asks for it). */
+    fun autoCalibrate() {
+        val granted = ContextCompat.checkSelfPermission(getApplication(), Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) session.autoCalibrate()
+    }
+
+    fun cancelCalibration() = session.cancelCalibration()
+    fun dismissCalibration() = session.dismissCalibration()
 
     // --- settings ----------------------------------------------------------------------------
 

@@ -73,6 +73,7 @@ import com.songsync.app.ui.components.TrackArtwork
 import com.songsync.app.ui.components.TrackRow
 import com.songsync.app.ui.components.artistOrUnknown
 import com.songsync.app.ui.components.linkLabel
+import com.songsync.app.ui.components.rememberCalibrationStarter
 import com.songsync.app.ui.components.rememberPlaybackPosition
 import com.songsync.app.ui.player.PlayerContent
 import com.songsync.app.ui.theme.SyncColors
@@ -98,6 +99,10 @@ fun HostScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val resources = LocalResources.current
+
+    val startCalibration = rememberCalibrationStarter(vm) {
+        onMessage(resources.getString(R.string.calibration_mic_denied))
+    }
 
     // After process death the text field is restored but the ViewModel is new.
     LaunchedEffect(Unit) { vm.onQueryChange(query) }
@@ -129,6 +134,14 @@ fun HostScreen(
                                     menuOpen = false
                                     vm.playSyncTest()
                                     onOpenPlayer()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.calibrate_button)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_graphic_eq), contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    startCalibration()
                                 },
                             )
                             DropdownMenuItem(
@@ -248,7 +261,7 @@ fun HostScreen(
 
 /** The host's expanded player, slid over the search screen. */
 @Composable
-fun HostPlayerScreen(vm: AppViewModel, onCollapse: () -> Unit) {
+fun HostPlayerScreen(vm: AppViewModel, onCollapse: () -> Unit, onMessage: (String) -> Unit) {
     BackHandler(onBack = onCollapse)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.statusBarsPadding().windowInsetsPadding(WindowInsets.navigationBars)) {
@@ -265,7 +278,7 @@ fun HostPlayerScreen(vm: AppViewModel, onCollapse: () -> Unit) {
                 )
                 Spacer(Modifier.size(48.dp))
             }
-            PlayerContent(vm, isHost = true, hostName = "")
+            PlayerContent(vm, isHost = true, hostName = "", onMessage = onMessage)
         }
     }
 }

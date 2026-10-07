@@ -8,7 +8,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /** Bump when messages change incompatibly; mismatched phones are told to update. */
-const val PROTOCOL_VERSION = 1
+const val PROTOCOL_VERSION = 2
 
 @Serializable
 sealed interface Message
@@ -74,6 +74,16 @@ data class ClientStatus(
     val rttMs: Int?,
     val onHold: Boolean,
 ) : Message
+
+/** Host -> one client: your slot in the upcoming echo-calibration track (only audible then). */
+@Serializable
+@SerialName("calib")
+data class CalibrationPlan(val trackKey: String, val slot: Int) : Message
+
+/** Host -> one client: add this to your echo calibration (ms), or null if you were not heard. */
+@Serializable
+@SerialName("calibrated")
+data class CalibrationResult(val correctionMs: Double?) : Message
 
 /** Either direction: leaving on purpose (so the other side does not try to reconnect). */
 @Serializable

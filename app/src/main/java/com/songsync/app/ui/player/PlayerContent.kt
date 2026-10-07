@@ -22,11 +22,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -36,7 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.songsync.app.R
 import com.songsync.app.data.model.Track
 import com.songsync.app.ui.AppViewModel
-import com.songsync.app.ui.components.CalibrationControl
+import com.songsync.app.ui.components.rememberCalibrationStarter
+import com.songsync.app.ui.components.routeLabel
 import com.songsync.app.ui.components.DiagnosticsPanel
 import com.songsync.app.ui.components.SeekBar
 import com.songsync.app.ui.components.SyncStatusChip
@@ -44,10 +47,17 @@ import com.songsync.app.ui.components.TrackArtwork
 import com.songsync.app.ui.components.TrackRow
 import com.songsync.app.ui.components.artistOrUnknown
 import com.songsync.app.ui.components.rememberPlaybackPosition
+import kotlin.math.roundToInt
 
 /** The full player. The host controls the group; a client can only pause itself. */
 @Composable
-fun PlayerContent(vm: AppViewModel, isHost: Boolean, hostName: String, modifier: Modifier = Modifier) {
+fun PlayerContent(
+    vm: AppViewModel,
+    isHost: Boolean,
+    hostName: String,
+    modifier: Modifier = Modifier,
+    onMessage: (String) -> Unit = {},
+) {
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val track = nowPlaying.track
 
@@ -69,7 +79,7 @@ fun PlayerContent(vm: AppViewModel, isHost: Boolean, hostName: String, modifier:
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
                 )
-                SyncPanel(vm)
+                SyncPanel(vm, isHost, onMessage)
             }
             return@BoxWithConstraints
         }
@@ -79,7 +89,7 @@ fun PlayerContent(vm: AppViewModel, isHost: Boolean, hostName: String, modifier:
                 TrackArtwork(track.artworkUrl, artSize, corner = 16.dp)
                 Spacer(Modifier.width(32.dp))
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    PlayerDetails(vm, track, isHost)
+                    PlayerDetails(vm, track, isHost, onMessage)
                 }
             }
         } else {
@@ -89,14 +99,14 @@ fun PlayerContent(vm: AppViewModel, isHost: Boolean, hostName: String, modifier:
             ) {
                 TrackArtwork(track.artworkUrl, artSize, corner = 16.dp)
                 Spacer(Modifier.height(24.dp))
-                PlayerDetails(vm, track, isHost)
+                PlayerDetails(vm, track, isHost, onMessage)
             }
         }
     }
 }
 
 @Composable
-private fun ColumnScope.PlayerDetails(vm: AppViewModel, track: Track, isHost: Boolean) {
+private fun ColumnScope.PlayerDetails(vm: AppViewModel, track: Track, isHost: Boolean, onMessage: (String) -> Unit) {
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val onHold by vm.onHold.collectAsStateWithLifecycle()
@@ -163,7 +173,7 @@ private fun ColumnScope.PlayerDetails(vm: AppViewModel, track: Track, isHost: Bo
     }
 
     Spacer(Modifier.height(16.dp))
-    SyncPanel(vm)
+    SyncPanel(vm, isHost, onMessage)
 
     if (isHost && queue.isNotEmpty()) {
         Spacer(Modifier.height(16.dp))
@@ -183,9 +193,9 @@ private fun ColumnScope.PlayerDetails(vm: AppViewModel, track: Track, isHost: Bo
     }
 }
 
-/** Sync status, echo calibration and (optionally) diagnostics. */
+/** Sync status, automatic echo calibration and (optionally) diagnostics. */
 @Composable
-private fun SyncPanel(vm: AppViewModel) {
+private fun SyncPanel(vm: AppViewModel, isHost: Boolean, onMessage: (String) -> Unit) {
     val stats by vm.stats.collectAsStateWithLifecycle()
     val calibration by vm.calibration.collectAsStateWithLifecycle()
     val route by vm.audioRoute.collectAsStateWithLifecycle()
@@ -194,7 +204,33 @@ private fun SyncPanel(vm: AppViewModel) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         SyncStatusChip(stats)
         Spacer(Modifier.height(8.dp))
-        CalibrationControl(calibration, route, vm::setCalibration, Modifier.fillMaxWidth())
+        if (isHost) {
+            val resources = LocalResources.current
+            val startCalibration = rememberCalibrationStarter(vm) {
+                onMessage(resources.getString(R.string.calibration_mic_denied))
+            }
+            OutlinedButton(onClick = startCalibration) {
+                Icon(painterResource(R.drawable.ic_graphic_eq), contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.calibrate_button))
+            }
+            Text(
+                stringResource(R.string.calibrate_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        val correction = calibration.roundToInt()
+        if (correction != 0) {
+            Text(
+                stringResource(R.string.calibration_current, routeLabel(route), correction),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
         if (diagnostics) {
             Spacer(Modifier.height(12.dp))
             Box(Modifier.fillMaxWidth()) { DiagnosticsPanel(stats, log) }

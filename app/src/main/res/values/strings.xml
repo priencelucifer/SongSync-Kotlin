@@ -113,6 +113,31 @@
     <string name="sync_interrupted">Interrupted by another app</string>
     <string name="sync_error_ms">±%1$d ms</string>
 
+    <!-- Automatic echo calibration -->
+    <string name="ok">OK</string>
+    <string name="calibrate_button">Auto-calibrate echo</string>
+    <string name="calibrate_hint">Each phone chirps in turn while this phone listens, then every phone is corrected automatically. Put this phone roughly in the middle.</string>
+    <string name="calibration_running_title">Calibrating echo…</string>
+    <string name="calibration_stage_starting">Getting every phone ready…</string>
+    <string name="calibration_stage_listening">Listening… each phone chirps in turn. Keep the phones where they will play and the room quiet.</string>
+    <string name="calibration_stage_analyzing">Measuring…</string>
+    <string name="calibration_done_title">Echo calibration done</string>
+    <string name="calibration_outcome">%1$s: %2$+d ms</string>
+    <string name="calibration_outcome_self">%1$s (this phone): %2$+d ms</string>
+    <string name="calibration_outcome_missing">%1$s: not heard. Turn its volume up and try again.</string>
+    <string name="calibration_done_hint">Saved for each phone\'s current speaker or headphones. Run it again after switching to a Bluetooth speaker.</string>
+    <string name="calibration_failed_title">Calibration didn\'t work</string>
+    <string name="calibration_failed_mic">This phone\'s microphone is not available.</string>
+    <string name="calibration_failed_start">The calibration sound didn\'t start in time. Try again.</string>
+    <string name="calibration_failed_nothing">Couldn\'t hear the chirps. Turn up the volume on every phone and try again.</string>
+    <string name="calibration_mic_denied">Auto-calibration needs the microphone to hear the phones. Nothing is recorded or sent.</string>
+    <string name="calibration_applied">Echo calibration adjusted automatically (%1$+d ms)</string>
+    <string name="calibration_not_heard_here">The host couldn\'t hear this phone during calibration. Turn up its volume and try again.</string>
+    <string name="calibration_current">Echo correction for %1$s: %2$+d ms</string>
+    <string name="calibration_busy">Calibrating, one moment…</string>
+    <string name="settings_calibration_manual">Echo calibration (advanced)</string>
+    <string name="settings_calibration_manual_hint">Set automatically by “Auto-calibrate echo” on the host. Fine-tune only if this phone still sounds early or late.</string>
+
     <!-- Devices -->
     <string name="devices_title">Phones in the group</string>
     <string name="devices_this_phone">%1$s (this phone)</string>

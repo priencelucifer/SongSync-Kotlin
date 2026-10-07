@@ -36,6 +36,9 @@ class ProtocolTest {
             StateUpdate(state),
             ClientStatus(track.key, ready = true, syncErrorMs = -3, rttMs = 18, onHold = false),
             ClientStatus(null, ready = false, syncErrorMs = null, rttMs = null, onHold = true),
+            CalibrationPlan(track.key, slot = 2),
+            CalibrationResult(correctionMs = -12.5),
+            CalibrationResult(correctionMs = null),
             Bye,
         )
         messages.forEach { assertThat(ProtocolCodec.decode(ProtocolCodec.encode(it))).isEqualTo(it) }

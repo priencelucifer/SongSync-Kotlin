@@ -196,6 +196,9 @@ class HostCoordinator(
     /** Position on the shared timeline right now. */
     fun positionMs(): Long = _state.value.positionAt(clock.nowNs())
 
+    /** Sends [message] to one phone (e.g. calibration plans and results). */
+    fun sendTo(endpointId: String, message: Message) = link.send(endpointId, message)
+
     // --- protocol ----------------------------------------------------------------------------
 
     private fun onEvent(event: TransportEvent) {
