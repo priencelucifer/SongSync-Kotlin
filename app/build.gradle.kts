@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -24,8 +24,8 @@ android {
         applicationId = "com.songsync.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "2.3.2"
+        versionCode = 10
+        versionName = "2.3.3"
     }
 
     signingConfigs {

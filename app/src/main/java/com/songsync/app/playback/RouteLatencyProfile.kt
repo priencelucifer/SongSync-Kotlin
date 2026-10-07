@@ -37,8 +37,17 @@ class RouteLatencyProfile(
 
     override val calibrationMs: Double get() = _calibration.value
 
+    private var bluetooth = false
+
+    /**
+     * Largest believable echo correction for the current output. Built-in speakers and wired
+     * outputs never hide more than ~100 ms; anything beyond that is a measurement error, and a
+     * 300 ms value (reached by a calibration bug in 2.3.0/2.3.1) puts the phone audibly off.
+     */
+    val maxCalibrationMs: Double get() = if (bluetooth) MAX_CALIBRATION_MS else MAX_WIRED_CALIBRATION_MS
+
     fun setCalibration(ms: Double) {
-        _calibration.value = ms.coerceIn(-MAX_CALIBRATION_MS, MAX_CALIBRATION_MS)
+        _calibration.value = ms.coerceIn(-maxCalibrationMs, maxCalibrationMs)
         scheduleSave()
     }
 
@@ -50,9 +59,10 @@ class RouteLatencyProfile(
             save(routeKey)
         }
         routeKey = route.key
+        bluetooth = route.type == AudioRoute.Type.BLUETOOTH
         val saved = settings.routeLatency(route.key)
         startLatencyMs = saved.startLatencyMs ?: DEFAULT_START_LATENCY_MS
-        _calibration.value = saved.calibrationMs
+        _calibration.value = saved.calibrationMs.coerceIn(-maxCalibrationMs, maxCalibrationMs)
         saveJob?.cancel() // loading values is not a change worth saving
         saveJob = null
         loadedKey = route.key
@@ -81,6 +91,7 @@ class RouteLatencyProfile(
 
     companion object {
         const val MAX_CALIBRATION_MS = 300.0
+        const val MAX_WIRED_CALIBRATION_MS = 120.0
         private const val SAVE_DEBOUNCE_MS = 2_000L
     }
 }
