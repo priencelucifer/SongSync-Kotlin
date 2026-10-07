@@ -61,6 +61,11 @@ android {
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/DEPENDENCIES")
     }
+
+    testOptions {
+        // Libraries log through android.util.Log; on the JVM those calls should be no-ops.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 // Live network smoke tests are opt-in: ./gradlew testDebugUnitTest -PliveTests
