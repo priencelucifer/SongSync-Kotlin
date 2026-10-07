@@ -1,0 +1,61 @@
+package com.songsync.app.sync
+
+import com.google.common.truth.Truth.assertThat
+import com.songsync.app.sync.DriftController.Decision
+import org.junit.Test
+
+class DriftControllerTest {
+
+    private val config = SyncConfig()
+
+    private fun controllerWith(vararg errors: Double) = DriftController(config).apply { errors.forEach(::addSample) }
+
+    @Test
+    fun `waits for enough samples`() {
+        assertThat(controllerWith(50.0, 50.0).decide()).isEqualTo(Decision.Wait)
+    }
+
+    @Test
+    fun `ignores errors inside the deadband`() {
+        val d = controllerWith(*DoubleArray(10) { config.deadbandMs - 1 }).decide()
+        assertThat(d).isEqualTo(Decision.Speed(1f))
+    }
+
+    @Test
+    fun `slows down when ahead and speeds up when behind`() {
+        val ahead = controllerWith(*DoubleArray(10) { 30.0 }).decide() as Decision.Speed
+        val behind = controllerWith(*DoubleArray(10) { -30.0 }).decide() as Decision.Speed
+        assertThat(ahead.speed).isLessThan(1f)
+        assertThat(behind.speed).isGreaterThan(1f)
+        assertThat(ahead.speed).isWithin(1e-4f).of(1f - (30.0 / config.correctionHorizonMs).toFloat())
+    }
+
+    @Test
+    fun `speed nudges are clamped`() {
+        val d = controllerWith(*DoubleArray(10) { 110.0 }).decide() as Decision.Speed
+        assertThat(d.speed).isEqualTo(1f - config.maxSpeedNudge)
+    }
+
+    @Test
+    fun `large errors ask for a hard resync`() {
+        assertThat(controllerWith(*DoubleArray(10) { 500.0 }).decide()).isEqualTo(Decision.HardResync)
+    }
+
+    @Test
+    fun `median shrugs off a single outlier`() {
+        val d = controllerWith(0.0, 1.0, -1.0, 0.0, 400.0, 1.0, 0.0).decide()
+        assertThat(d).isEqualTo(Decision.Speed(1f))
+    }
+
+    @Test
+    fun `keeps correcting until well inside the deadband`() {
+        val c = DriftController(config)
+        repeat(10) { c.addSample(config.deadbandMs + 2) }
+        assertThat((c.decide() as Decision.Speed).speed).isLessThan(1f)
+        // Now between "done" and deadband: hysteresis keeps the correction going.
+        repeat(10) { c.addSample((config.deadbandMs + config.correctionDoneMs) / 2) }
+        assertThat((c.decide() as Decision.Speed).speed).isLessThan(1f)
+        repeat(10) { c.addSample(config.correctionDoneMs / 2) }
+        assertThat(c.decide()).isEqualTo(Decision.Speed(1f))
+    }
+}
