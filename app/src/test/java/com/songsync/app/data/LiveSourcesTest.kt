@@ -50,5 +50,12 @@ class LiveSourcesTest {
         println("YouTube: ${resolved.track.title} (${resolved.track.id}) -> ${resolved.streamUrl.take(80)}...")
         val playerClient = http.newBuilder().addInterceptor(YouTubeStreamInterceptor()).build()
         assertThat(streamResponds(resolved.streamUrl, playerClient)).isAnyOf(200, 206)
+
+        // What a guest does with the host's track: the same pinned stream format.
+        assertThat(resolved.track.itag).isNotNull()
+        val guest = source.resolve(resolved.track, allowAlternatives = false)
+        println("YouTube pinned itag ${resolved.track.itag}, guest got ${guest.track.itag}")
+        assertThat(guest.track.itag).isEqualTo(resolved.track.itag)
+        assertThat(guest.streamUrl).contains("itag=${resolved.track.itag}")
     }
 }

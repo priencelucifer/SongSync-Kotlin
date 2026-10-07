@@ -8,7 +8,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /** Bump when messages change incompatibly; mismatched phones are told to update. */
-const val PROTOCOL_VERSION = 2
+const val PROTOCOL_VERSION = 3 // 3: Track.itag pins the YouTube stream; older phones would ignore it
 
 @Serializable
 sealed interface Message

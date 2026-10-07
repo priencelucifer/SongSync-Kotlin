@@ -31,7 +31,8 @@ class YouTubeSource : MusicSource {
 
     override suspend fun resolve(track: Track, allowAlternatives: Boolean): ResolvedTrack = runInterruptible(Dispatchers.IO) {
         try {
-            ResolvedTrack(track, audioUrl(track.id))
+            val stream = audioStream(track.id, track.itag)
+            ResolvedTrack(track.copy(itag = stream.itag), stream.content)
         } catch (e: Exception) {
             if (!allowAlternatives || e is InterruptedException) throw e
             // As in the original app: if this upload is blocked (age gate, DRM, region), try an
@@ -40,8 +41,11 @@ class YouTubeSource : MusicSource {
                 searchItems("${track.title} ${track.artist} lyric", YoutubeSearchQueryHandlerFactory.VIDEOS)
             }.getOrDefault(emptyList()).mapNotNull(::toTrack).filter { it.id != track.id }.take(MAX_ALTERNATIVES)
             for (alternative in alternatives) {
-                val url = runCatching { audioUrl(alternative.id) }.getOrNull() ?: continue
-                return@runInterruptible ResolvedTrack(track.copy(id = alternative.id, durationMs = alternative.durationMs), url)
+                val stream = runCatching { audioStream(alternative.id, pinnedItag = null) }.getOrNull() ?: continue
+                return@runInterruptible ResolvedTrack(
+                    track.copy(id = alternative.id, durationMs = alternative.durationMs, itag = stream.itag),
+                    stream.content,
+                )
             }
             throw SourceException("YouTube blocked this song", e)
         }
@@ -65,16 +69,19 @@ class YouTubeSource : MusicSource {
         )
     }
 
-    private fun audioUrl(videoId: String): String {
+    /** The audio stream to play: the host's [pinnedItag] if given, otherwise the best one. */
+    private fun audioStream(videoId: String, pinnedItag: Int?): AudioStream {
         val info = StreamInfo.getInfo(service, "https://www.youtube.com/watch?v=$videoId")
-        val stream = info.audioStreams
-            .filter { it.isUrl && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-            .sortedWith(
-                compareByDescending<AudioStream> { it.audioTrackType == null || it.audioTrackType == AudioTrackType.ORIGINAL }
-                    .thenByDescending { it.averageBitrate },
+        val streams = info.audioStreams.filter { it.isUrl && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+        val choices = streams.map {
+            StreamChoice(
+                itag = it.itag,
+                format = it.format?.name.orEmpty(),
+                averageBitrate = it.averageBitrate,
+                original = it.audioTrackType == null || it.audioTrackType == AudioTrackType.ORIGINAL,
             )
-            .firstOrNull() ?: throw SourceException("No playable audio stream")
-        return stream.content
+        }
+        return streams[chooseStream(choices, pinnedItag)]
     }
 
     private fun bestThumbnail(images: List<Image>): String =
@@ -85,3 +92,30 @@ class YouTubeSource : MusicSource {
         const val MAX_ALTERNATIVES = 5
     }
 }
+
+/** What matters about one YouTube audio stream when choosing it (testable without NewPipe). */
+internal data class StreamChoice(val itag: Int, val format: String, val averageBitrate: Int, val original: Boolean)
+
+/**
+ * Index of the stream to play. Without a pin: the original-language track with the highest
+ * bitrate. With the host's [pinnedItag]: exactly that stream, or failing that one in the same
+ * format (same codec and encoder, so the same priming), never a different codec, because
+ * different files of one video are offset by a constant that sync cannot see.
+ */
+internal fun chooseStream(streams: List<StreamChoice>, pinnedItag: Int?): Int {
+    if (streams.isEmpty()) throw SourceException("No playable audio stream")
+    val ranked = streams.indices.sortedWith(
+        compareByDescending<Int> { streams[it].original }.thenByDescending { streams[it].averageBitrate },
+    )
+    if (pinnedItag == null || pinnedItag < 0) return ranked.first()
+    ranked.firstOrNull { streams[it].itag == pinnedItag }?.let { return it }
+    val pinnedFormat = YOUTUBE_ITAG_FORMATS[pinnedItag]
+    ranked.firstOrNull { pinnedFormat != null && streams[it].format == pinnedFormat }?.let { return it }
+    throw SourceException("This phone can't get the same YouTube audio as the host (format $pinnedItag)")
+}
+
+/** Container/codec of YouTube's common audio-only itags (NewPipe MediaFormat names). */
+private val YOUTUBE_ITAG_FORMATS = mapOf(
+    139 to "M4A", 140 to "M4A", 141 to "M4A",
+    249 to "WEBMA_OPUS", 250 to "WEBMA_OPUS", 251 to "WEBMA_OPUS",
+)

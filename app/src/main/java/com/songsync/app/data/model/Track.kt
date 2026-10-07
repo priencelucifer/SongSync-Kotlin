@@ -23,6 +23,11 @@ data class Track(
     val highQualityAvailable: Boolean = false,
     /** JioSaavn: bitrate the host verified, so every phone fetches the identical file. */
     val bitrateKbps: Int? = null,
+    /**
+     * YouTube: stream format (itag) the host chose, so every phone decodes the identical file.
+     * Different itags of one video are not time-aligned (encoder priming differs).
+     */
+    val itag: Int? = null,
 ) {
     /** Stable identity used by the protocol; independent of the chosen bitrate. */
     val key: String get() = "${source.name}:$id"
