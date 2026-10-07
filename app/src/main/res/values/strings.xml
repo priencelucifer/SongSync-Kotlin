@@ -126,6 +126,7 @@
     <string name="calibration_outcome">%1$s: %2$+d ms</string>
     <string name="calibration_outcome_self">%1$s (this phone): %2$+d ms</string>
     <string name="calibration_outcome_missing">%1$s: not heard. Turn its volume up and try again.</string>
+    <string name="calibration_outcome_rejected">%1$s: measured %2$+d ms, too large to be real for its speaker, so not applied. Check its volume and try again.</string>
     <string name="calibration_outcome_paused">%1$s: skipped, it is paused on that phone. Tap “Rejoin the music” there and try again.</string>
     <string name="calibration_done_hint">Saved for each phone\'s current speaker or headphones. Run it again after switching to a Bluetooth speaker.</string>
     <string name="calibration_failed_title">Calibration didn\'t work</string>

@@ -71,6 +71,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -121,11 +122,19 @@ sealed interface CalibrationUi {
 
 /**
  * [correctionMs] is what was added to that phone's calibration, or null if it was not heard.
- * [paused] phones were on hold ("Pause here") and so were not measured.
+ * [paused] phones were on hold ("Pause here") and so were not measured. [rejectedMs] is a
+ * measured correction too large to be real for that output, which was not applied.
  */
-data class CalibrationOutcome(val name: String, val isSelf: Boolean, val correctionMs: Double?, val paused: Boolean = false) {
+data class CalibrationOutcome(
+    val name: String,
+    val isSelf: Boolean,
+    val correctionMs: Double?,
+    val paused: Boolean = false,
+    val rejectedMs: Double? = null,
+) {
     fun label(): String = when {
         paused -> "paused"
+        rejectedMs != null -> "rejected %+.0f ms".format(rejectedMs)
         correctionMs == null -> "not heard"
         else -> "%+.1f ms".format(correctionMs)
     }
@@ -526,12 +535,23 @@ class SessionManager(
             val result = measured.copy(
                 phones = measured.phones.map { it.copy(lateMs = it.lateMs?.plus(trackingErrorMs[it.slot] ?: 0.0)) },
             )
-            val corrections = result.corrections(RouteLatencyProfile.MAX_CALIBRATION_MS)
-            if (corrections.isEmpty()) throw CalibrationFailure(R.string.calibration_failed_nothing, notHeard)
+            val measuredCorrections = result.corrections(RouteLatencyProfile.MAX_CALIBRATION_MS)
+            if (measuredCorrections.isEmpty()) throw CalibrationFailure(R.string.calibration_failed_nothing, notHeard)
+            // Built-in speakers and wired outputs never hide 150+ ms; a correction that large means
+            // a bad measurement, and applying it would push the next measurement further off.
+            val routeOf = mapOf(0 to routes.route.value.type.name) +
+                peers.mapIndexed { index, peer -> (index + 1) to host.peers.value[peer.endpointId]?.status?.diag?.route }
+            val implausible = measuredCorrections.filter { (slot, correction) ->
+                abs(correction) > MAX_PLAUSIBLE_WIRED_CORRECTION_MS && routeOf[slot]?.startsWith(BLUETOOTH_ROUTE) != true
+            }
+            val corrections = measuredCorrections - implausible.keys
             corrections[0]?.let { latency.setCalibration(latency.calibrationMs + it) }
-            peers.forEachIndexed { index, peer -> host.sendTo(peer.endpointId, CalibrationResult(corrections[index + 1])) }
-            val outcomes = listOf(CalibrationOutcome(deviceName, isSelf = true, corrections[0])) +
-                peers.mapIndexed { index, peer -> CalibrationOutcome(peer.name, isSelf = false, corrections[index + 1]) } +
+            peers.forEachIndexed { index, peer ->
+                if (index + 1 !in implausible) host.sendTo(peer.endpointId, CalibrationResult(corrections[index + 1]))
+            }
+            fun outcome(slot: Int, name: String) =
+                CalibrationOutcome(name, isSelf = slot == 0, correctionMs = corrections[slot], rejectedMs = implausible[slot])
+            val outcomes = listOf(outcome(0, deviceName)) + peers.mapIndexed { index, peer -> outcome(index + 1, peer.name) } +
                 heldOutcomes
             log("echo calibration: " + outcomes.joinToString { o -> "${o.name} ${o.label()}" })
             return PassResult(outcomes, micNote)
@@ -1007,6 +1027,8 @@ class SessionManager(
         const val REPORT_PASS_GAP_MS = 1_500L
         const val REPORT_SETTLE_MS = 2_500L
         const val MAX_REPORT_TRACKS = 8
+        /** Largest calibration step believed for a non-Bluetooth output (see calibrationPass). */
+        const val MAX_PLAUSIBLE_WIRED_CORRECTION_MS = 150.0
         val BLUETOOTH_ROUTE = AudioRoute.Type.BLUETOOTH.name
         const val MAX_LOG_LINES = 12
         const val STATS_INTERVAL_MS = 500L

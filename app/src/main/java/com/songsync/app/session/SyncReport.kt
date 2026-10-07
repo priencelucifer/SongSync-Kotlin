@@ -115,7 +115,7 @@ object SyncReport {
         }
         d?.let { parts += "start %.0f cal %+.1f".fmt(it.startLatencyMs, it.calibrationMs) }
         d?.let { diag ->
-            parts += "${diag.phase} err ${p.syncErrorMs?.let { "%+d".fmt(it) } ?: "-"} resync ${diag.hardResyncs}"
+            parts += "state ${diag.phase.lowercase()} err ${p.syncErrorMs?.let { "%+d".fmt(it) } ?: "-"} resync ${diag.hardResyncs}"
         }
         return parts.joinToString(" · ")
     }
@@ -154,6 +154,7 @@ object SyncReport {
 
     private fun value(o: CalibrationOutcome): String = when {
         o.paused -> "paused"
+        o.rejectedMs != null -> "rejected(%+.0f)".fmt(o.rejectedMs)
         o.correctionMs == null -> "n/h"
         else -> "%+.1f".fmt(o.correctionMs)
     }
