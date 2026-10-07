@@ -264,11 +264,20 @@ fun DiagnosticsPanel(stats: SyncStats, log: List<String>, modifier: Modifier = M
         DiagnosticRow(
             R.string.diag_rtt,
             if (stats.minRttMs != null && stats.medianRttMs != null) {
-                "%.1f / %.1f ms (%d)".format(stats.minRttMs, stats.medianRttMs, stats.clockSamples)
+                "%.1f / %.1f / %.1f ms (%d)".format(stats.minRttMs, stats.medianRttMs, stats.p90RttMs ?: 0.0, stats.clockSamples)
             } else {
                 "–"
             },
         )
+        DiagnosticRow(
+            R.string.diag_clock_spread,
+            if (stats.clockSpreadMs != null && stats.clockAgeS != null) {
+                "±%.2f ms (%.0f s ago)".format(stats.clockSpreadMs, stats.clockAgeS)
+            } else {
+                "–"
+            },
+        )
+        DiagnosticRow(R.string.diag_clock_skew, stats.clockSkewPpm?.let { "%+.1f ppm".format(it) } ?: "–")
         DiagnosticRow(R.string.diag_start_latency, "%.1f ms".format(f.startLatencyMs))
         DiagnosticRow(R.string.diag_resyncs, f.hardResyncs.toString())
         DiagnosticRow(R.string.diag_link, linkLabel(stats.linkQuality))

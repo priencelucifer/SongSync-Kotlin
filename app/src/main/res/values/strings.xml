@@ -174,7 +174,9 @@
     <string name="diag_error">Sync error</string>
     <string name="diag_speed">Speed</string>
     <string name="diag_offset">Clock offset</string>
-    <string name="diag_rtt">Round trip (min / median)</string>
+    <string name="diag_rtt">Round trip (min / median / p90)</string>
+    <string name="diag_clock_spread">Clock sample spread</string>
+    <string name="diag_clock_skew">Clock drift</string>
     <string name="diag_start_latency">Learned start latency</string>
     <string name="diag_resyncs">Hard resyncs</string>
     <string name="diag_link">Link</string>

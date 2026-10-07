@@ -113,6 +113,12 @@ data class SyncStats(
     val minRttMs: Double?,
     val clockSamples: Int,
     val linkQuality: Int? = null,
+    val p90RttMs: Double? = null,
+    /** How much the best clock samples disagree (MAD). */
+    val clockSpreadMs: Double? = null,
+    /** Seconds since the newest clock sample arrived. */
+    val clockAgeS: Double? = null,
+    val clockSkewPpm: Double? = null,
 )
 
 /**
@@ -562,6 +568,10 @@ class SessionManager(
                         minRttMs = estimate?.let { it.minRttNs.toDouble() / NANOS_PER_MS },
                         clockSamples = estimate?.samples ?: 0,
                         linkQuality = _client.value?.linkQuality?.value,
+                        p90RttMs = estimate?.let { it.p90RttNs.toDouble() / NANOS_PER_MS },
+                        clockSpreadMs = estimate?.let { it.offsetSpreadNs.toDouble() / NANOS_PER_MS },
+                        clockAgeS = estimate?.let { (clock.nowNs() - it.newestSampleAtNs) / 1e9 },
+                        clockSkewPpm = estimate?.skewPpm,
                     )
                     delay(STATS_INTERVAL_MS)
                 }

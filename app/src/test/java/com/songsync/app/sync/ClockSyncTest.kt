@@ -77,6 +77,30 @@ class ClockSyncTest {
     }
 
     @Test
+    fun `quality readouts report spread, newest sample and drift`() {
+        val random = Random(5)
+        val sync = ClockSync()
+        val skew = 40e-6 // host clock runs 40 ppm fast relative to ours
+        var now = 0L
+        repeat(120) {
+            val up = (5 + (-3.0 * ln(1 - random.nextDouble()))).toLong() * 1_000_000
+            val down = (5 + (-3.0 * ln(1 - random.nextDouble()))).toLong() * 1_000_000
+            val t0 = now
+            val t1 = t0 + up + trueOffsetNs + ((t0 + up) * skew).toLong()
+            val t2 = t1 + 300_000
+            val t3 = t0 + up + 300_000 + down
+            sync.addSample(t0, t1, t2, t3)
+            if (it == 30) assertThat(sync.estimate!!.skewPpm).isNull() // not enough history yet
+            now += 1_000_000_000
+        }
+        val e = sync.estimate!!
+        assertThat(e.newestSampleAtNs).isGreaterThan(now - 1_000_000_000)
+        // Jitter of a few ms each way: the best samples agree to within a couple of ms.
+        assertThat(e.offsetSpreadNs / 1e6).isAtMost(2.0)
+        assertThat(e.skewPpm!!).isWithin(10.0).of(40.0)
+    }
+
+    @Test
     fun `impossible samples are rejected`() {
         val sync = ClockSync()
         assertThat(sync.addSample(t0 = 100, t1 = 50, t2 = 40, t3 = 120)).isFalse() // t2 < t1

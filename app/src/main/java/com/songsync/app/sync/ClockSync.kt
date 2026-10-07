@@ -1,5 +1,6 @@
 package com.songsync.app.sync
 
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -30,11 +31,22 @@ class ClockSync(
         val medianRttNs: Long,
         val p90RttNs: Long,
         val samples: Int,
+        /** Median absolute deviation of the fastest-quarter offsets: how much they disagree. */
+        val offsetSpreadNs: Long = 0,
+        /** Local receive time of the newest sample, to tell a stale estimate from a fresh one. */
+        val newestSampleAtNs: Long = 0,
+        /**
+         * How fast the estimate itself moves (host clock rate vs ours), in ppm, once there is
+         * at least [SKEW_MIN_SPAN_NS] of history; null before.
+         */
+        val skewPpm: Double? = null,
     )
 
-    private data class Sample(val offsetNs: Long, val rttNs: Long)
+    private data class Sample(val offsetNs: Long, val rttNs: Long, val atNs: Long)
 
     private val samples = ArrayDeque<Sample>()
+    /** (local time, estimated offset) after each sample, for the skew readout. */
+    private val history = ArrayDeque<Pair<Long, Long>>()
 
     var estimate: Estimate? = null
         private set
@@ -44,9 +56,9 @@ class ClockSync(
         val rtt = (t3 - t0) - (t2 - t1)
         if (rtt < 0 || t3 < t0 || t2 < t1) return false
         val offset = ((t1 - t0) + (t2 - t3)) / 2
-        samples.addLast(Sample(offset, rtt))
+        samples.addLast(Sample(offset, rtt, t3))
         while (samples.size > maxWindow) samples.removeFirst()
-        recompute()
+        recompute(t3)
         return true
     }
 
@@ -61,29 +73,43 @@ class ClockSync(
 
     fun reset() {
         samples.clear()
+        history.clear()
         estimate = null
     }
 
-    private fun recompute() {
+    private fun recompute(nowNs: Long) {
         val window = activeWindow()
         val n = window.size
         val byRtt = window.sortedBy { it.rttNs }
         val best = max(1, ceil(n * BEST_FRACTION).toInt())
         val offsets = byRtt.take(best).map { it.offsetNs }.sorted()
         val rtts = byRtt.map { it.rttNs }
+        val offset = offsets.median()
+
+        history.addLast(nowNs to offset)
+        while (history.size > 1 && nowNs - history.first().first > SKEW_MAX_SPAN_NS) history.removeFirst()
+        val (oldAt, oldOffset) = history.first()
+        val skewPpm = if (nowNs - oldAt >= SKEW_MIN_SPAN_NS) (offset - oldOffset).toDouble() / (nowNs - oldAt) * 1e6 else null
+
         estimate = Estimate(
-            offsetNs = offsets.median(),
+            offsetNs = offset,
             minRttNs = rtts.first(),
             medianRttNs = rtts.median(),
             p90RttNs = rtts[min(n - 1, (n * 0.9).toInt())],
             samples = n,
+            offsetSpreadNs = offsets.map { abs(it - offset) }.sorted().median(),
+            newestSampleAtNs = window.last().atNs,
+            skewPpm = skewPpm,
         )
     }
 
     private fun List<Long>.median(): Long =
         if (size % 2 == 1) this[size / 2] else (this[size / 2 - 1] + this[size / 2]) / 2
 
-    private companion object {
-        const val BEST_FRACTION = 0.25
+    companion object {
+        private const val BEST_FRACTION = 0.25
+        /** Skew is measured over the last 60–180 s of estimates. */
+        const val SKEW_MIN_SPAN_NS = 60_000_000_000L
+        private const val SKEW_MAX_SPAN_NS = 180_000_000_000L
     }
 }
