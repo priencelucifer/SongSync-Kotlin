@@ -395,7 +395,7 @@ class PlaybackFollower(
         lastErrorMs = median
         trackCalm(median, nowLocal)
         if (correctionsFrozen) return
-        when (val decision = drift.decide(nowLocal)) {
+        when (val decision = drift.decide(nowLocal, player.speed)) {
             DriftController.Decision.Wait -> Unit
             is DriftController.Decision.Speed -> applySpeed(decision.speed)
             is DriftController.Decision.HardResync ->

@@ -15,10 +15,10 @@ data class SyncConfig(
     val windowSamples: Int = 10,
     val minSamplesForDecision: Int = 5,
     /**
-     * Below this error nothing is corrected. With fine, gentle speed steps a tighter band does
-     * not oscillate, and leaves room for ~1-2 ms of clock-offset error before 5 ms is heard.
+     * Below this error nothing is corrected. With fine, lag-compensated speed steps a tight band
+     * does not oscillate, and leaves room for ~1-2 ms of clock-offset error before 5 ms is heard.
      */
-    val deadbandMs: Double = 3.0,
+    val deadbandMs: Double = 2.5,
     /** Once correcting, keep going until the error is this small (hysteresis). */
     val correctionDoneMs: Double = 1.5,
     /** Errors above this, if they persist, are fixed by re-syncing instead of speed nudges. */
@@ -36,10 +36,13 @@ data class SyncConfig(
     val maxSpeedNudge: Float = 0.02f,
     /**
      * For errors below [smallErrorMs] the nudge is capped lower: accurate systems never correct
-     * faster than ~0.05-0.1% (Snapcast), and gentle nudges cannot overshoot or be heard.
+     * faster than ~0.05-0.1% (Snapcast), and gentle nudges cannot overshoot or be heard. Larger
+     * errors (e.g. after a start on phones that start tens of ms off) still get up to
+     * [maxSpeedNudge] so they settle within a couple of seconds; at 20 ms an Android 8 phone
+     * was still correcting several seconds after each start.
      */
     val smallErrorMaxNudge: Float = 0.005f,
-    val smallErrorMs: Double = 20.0,
+    val smallErrorMs: Double = 8.0,
     /** Speeds are quantised to this step so tiny measurement noise does not cause changes. */
     val speedStep: Float = 0.001f,
     /** A speed is kept at least this long before changing again (each change has a cost). */

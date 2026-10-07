@@ -77,6 +77,8 @@ class SimulatedPlayer(
      * average away.
      */
     private val noiseSmoothing: Double = 0.0,
+    /** Extra start latency, different on every start (old phones are not consistent). */
+    private val startJitterMs: () -> Long = { 0 },
 ) : SyncPlayer {
     private val audioRate = 1.0 + audioPpm / 1e6
     var durationMs = 600_000L
@@ -178,7 +180,7 @@ class SimulatedPlayer(
         playWhenReady = true
         plays++
         if (!waitingForData) {
-            audibleFromMs = max(trueMs(), readyAtMs) + startLatencyMs
+            audibleFromMs = max(trueMs(), readyAtMs) + startLatencyMs + startJitterMs()
             glitchFromMs = audibleFromMs
         }
     }
@@ -313,6 +315,7 @@ class SimPhone(
     glitchDurationMs: Long = 800,
     reportBiasMs: Double = 0.0,
     noiseSmoothing: Double = 0.0,
+    startJitterMs: Long = 0,
 ) {
     private val trueMs = { scope.testScheduler.currentTime }
     val clock = DeviceClock(trueMs, clockOffsetMs * 1_000_000, clockPpm)
@@ -323,6 +326,7 @@ class SimPhone(
         glitchDurationMs = glitchDurationMs,
         reportBiasMs = reportBiasMs,
         noiseSmoothing = noiseSmoothing,
+        startJitterMs = { if (startJitterMs > 0) random.nextLong(-startJitterMs, startJitterMs + 1) else 0 },
     )
     val latency = InMemoryLatencyProfile()
     val follower = PlaybackFollower(player, clock, VirtualScheduler(scope.backgroundScope, clock), config, latency)

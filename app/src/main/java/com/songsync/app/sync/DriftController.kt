@@ -44,9 +44,16 @@ class DriftController(private val config: SyncConfig) {
         return if (n % 2 == 1) sorted[n / 2] else (sorted[n / 2 - 1] + sorted[n / 2]) / 2
     }
 
-    fun decide(nowNs: Long): Decision {
+    /**
+     * [currentSpeed] is what the player runs at now. While a correction runs, the window median
+     * describes the error about half a window ago; at 2% over a 1 s window that is ~10 ms stale,
+     * which made a 55 ms correction overshoot to +9 ms and then -7 ms. The estimate is moved
+     * forward by what the current speed has gained since.
+     */
+    fun decide(nowNs: Long, currentSpeed: Float = 1f): Decision {
         if (window.size < config.minSamplesForDecision) return Decision.Wait
-        val error = medianErrorMs() ?: return Decision.Wait
+        val median = medianErrorMs() ?: return Decision.Wait
+        val error = median + (currentSpeed - 1f) * (window.size * config.tickMs / 2.0)
         val magnitude = abs(error)
 
         if (magnitude > config.hardResyncMs) {

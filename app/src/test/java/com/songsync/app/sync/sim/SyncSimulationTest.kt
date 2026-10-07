@@ -55,11 +55,13 @@ class SyncSimulationTest {
             name: String,
             downloadRateX: Double = Double.POSITIVE_INFINITY,
             reportBiasMs: Double = 0.0,
+            startJitterMs: Long = 0,
+            startGlitchMs: Double = glitchMs,
         ): Pair<SimPhone, ClientCoordinator> {
             val phone = SimPhone(
                 name, scope, network, random, config,
-                startGlitchMs = glitchMs, glitchDurationMs = glitchDurationMs,
-                reportBiasMs = reportBiasMs, noiseSmoothing = noiseSmoothing,
+                startGlitchMs = startGlitchMs, glitchDurationMs = glitchDurationMs,
+                reportBiasMs = reportBiasMs, noiseSmoothing = noiseSmoothing, startJitterMs = startJitterMs,
             )
             phone.player.downloadRateX = downloadRateX
             val client = ClientCoordinator(scope.backgroundScope, phone.endpoint, phone.clock, phone.local, name, "test")
@@ -350,6 +352,29 @@ class SyncSimulationTest {
         group.host.play()
         advanceTimeBy(8_000)
         assertThat(worstErrorOver(group, 10_000)).isAtMost(5.0)
+    }
+
+    @Test
+    fun `an inconsistent old phone has settled before calibration chirps start`() = runTest {
+        // Like the Android 8 phone in a real report: every start is up to ±40 ms off, and the
+        // reported position is wrong for a moment after it. Calibration freezes corrections
+        // shortly before its first chirp, so each fresh start must be settled by then.
+        val freezeAtMs = com.songsync.app.calibration.CalibrationSignal.LEAD_IN_MS - 1_000
+        val group = Group(this, seed = 43, clientCount = 1, config)
+        val (old, _) = group.addClient("old", startJitterMs = 40, startGlitchMs = 60.0)
+        startPlaying(group)
+        advanceTimeBy(20_000)
+        val atFreeze = mutableListOf<Double>()
+        repeat(6) {
+            group.host.seekTo(0) // a fresh scheduled start (re-armed at once, like each calibration pass)
+            advanceTimeBy(freezeAtMs)
+            atFreeze += group.errorsMs(listOf(old)).single()
+            advanceTimeBy(5_000)
+        }
+        println("old phone error at calibration freeze: ${atFreeze.joinToString { "%+.1f".format(it) }} ms")
+        // Was ±40 ms with a 5 s lead-in; now within the dead-band plus clock error on every run.
+        atFreeze.forEach { assertThat(abs(it)).isAtMost(5.0) }
+        assertThat(old.follower.status.hardResyncs).isEqualTo(0) // seeks re-arm, no re-sync needed
     }
 
     @Test

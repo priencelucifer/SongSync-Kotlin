@@ -42,8 +42,10 @@ class DriftControllerTest {
 
     @Test
     fun `small errors get gentle nudges, large ones the full range`() {
-        val small = controllerWith(*DoubleArray(10) { 15.0 }).decide() as Decision.Speed
-        assertThat(small.speed).isEqualTo(1f - config.smallErrorMaxNudge) // 15/1500 = 1% capped to 0.5%
+        val small = controllerWith(*DoubleArray(10) { 7.5 }).decide() as Decision.Speed
+        assertThat(small.speed).isWithin(1e-6f).of(1f - config.smallErrorMaxNudge) // 7.5/1500 = 0.5%, the cap
+        val medium = controllerWith(*DoubleArray(10) { 15.0 }).decide() as Decision.Speed
+        assertThat(medium.speed).isWithin(1e-6f).of(0.99f) // 15/1500 = 1%, not capped
         val large = controllerWith(*DoubleArray(10) { -60.0 }).decide() as Decision.Speed
         assertThat(large.speed).isWithin(1e-6f).of(1f + 0.04f.coerceAtMost(config.maxSpeedNudge))
     }

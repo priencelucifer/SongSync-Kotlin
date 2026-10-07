@@ -19,10 +19,15 @@ import kotlin.math.sin
  *
  * Layout: a lead-in (phones settle into sync), then one slot per phone with [CHIRPS_PER_SLOT]
  * chirps each, then a short tail. Slot boundaries fall in silence, so muting is click-free.
+ *
+ * The lead-in must cover a whole fresh start: some phones (seen on Android 8) start tens of ms
+ * off and report unreliable positions for the first seconds, and the closed loop needs several
+ * seconds after that. With a 5 s lead-in (v1) a real phone measured +42, -12 and -31 ms in three
+ * identical checks, i.e. the check caught it mid-correction.
  */
 object CalibrationSignal {
     const val SAMPLE_RATE = 48_000
-    const val LEAD_IN_MS = 5_000L
+    const val LEAD_IN_MS = 12_000L
     const val SLOT_MS = 2_000L
     const val CHIRPS_PER_SLOT = 4
     const val CHIRP_OFFSET_MS = 250L
@@ -32,7 +37,8 @@ object CalibrationSignal {
     /** Phones measured per run. */
     const val MAX_SLOTS = 8
 
-    private const val ID_PREFIX = "calib-v1-"
+    /** Bump with any layout change: every phone must generate the identical track. */
+    private const val ID_PREFIX = "calib-v2-"
     private const val F_START = 2_000.0
     private const val F_END = 8_000.0
     private const val AMPLITUDE = 0.7
