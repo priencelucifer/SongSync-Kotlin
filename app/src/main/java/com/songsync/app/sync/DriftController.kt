@@ -61,8 +61,9 @@ class DriftController(private val config: SyncConfig) {
         if (!correcting) return Decision.Speed(1f)
 
         // Ahead (positive error) -> slow down; behind -> speed up. Never round a needed nudge to 0.
-        val raw = (-error / config.correctionHorizonMs).toFloat().coerceIn(-config.maxSpeedNudge, config.maxSpeedNudge)
+        val limit = if (magnitude < config.smallErrorMs) config.smallErrorMaxNudge else config.maxSpeedNudge
+        val raw = (-error / config.correctionHorizonMs).toFloat().coerceIn(-limit, limit)
         val steps = (raw / config.speedStep).roundToInt().let { if (it == 0) raw.sign.toInt() else it }
-        return Decision.Speed(1f + (steps * config.speedStep).coerceIn(-config.maxSpeedNudge, config.maxSpeedNudge))
+        return Decision.Speed(1f + (steps * config.speedStep).coerceIn(-limit, limit))
     }
 }

@@ -14,8 +14,11 @@ data class SyncConfig(
     /** Median window for the drift controller (samples, at [tickMs] each). */
     val windowSamples: Int = 10,
     val minSamplesForDecision: Int = 5,
-    /** Below this error nothing is corrected. */
-    val deadbandMs: Double = 4.0,
+    /**
+     * Below this error nothing is corrected. With fine, gentle speed steps a tighter band does
+     * not oscillate, and leaves room for ~1-2 ms of clock-offset error before 5 ms is heard.
+     */
+    val deadbandMs: Double = 3.0,
     /** Once correcting, keep going until the error is this small (hysteresis). */
     val correctionDoneMs: Double = 1.5,
     /** Errors above this, if they persist, are fixed by re-syncing instead of speed nudges. */
@@ -29,10 +32,16 @@ data class SyncConfig(
     val resyncBackoffMaxMs: Long = 60_000,
     /** Locked and calm for this long resets the back-off. */
     val resyncCalmResetMs: Long = 30_000,
-    /** Largest playback-speed change used for soft correction (0.02 = ±2%). */
+    /** Largest playback-speed change used for soft correction (0.02 = ±2%), for big errors only. */
     val maxSpeedNudge: Float = 0.02f,
+    /**
+     * For errors below [smallErrorMs] the nudge is capped lower: accurate systems never correct
+     * faster than ~0.05-0.1% (Snapcast), and gentle nudges cannot overshoot or be heard.
+     */
+    val smallErrorMaxNudge: Float = 0.005f,
+    val smallErrorMs: Double = 20.0,
     /** Speeds are quantised to this step so tiny measurement noise does not cause changes. */
-    val speedStep: Float = 0.0025f,
+    val speedStep: Float = 0.001f,
     /** A speed is kept at least this long before changing again (each change has a cost). */
     val minSpeedDwellMs: Long = 1_500,
     /** Soft correction aims to remove the error over roughly this long. */

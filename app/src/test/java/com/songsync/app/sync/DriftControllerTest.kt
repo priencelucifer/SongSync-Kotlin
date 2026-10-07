@@ -35,8 +35,17 @@ class DriftControllerTest {
     fun `speed nudges are clamped and quantised`() {
         val d = controllerWith(*DoubleArray(10) { 110.0 }).decide() as Decision.Speed
         assertThat(d.speed).isEqualTo(1f - config.maxSpeedNudge)
-        val small = controllerWith(*DoubleArray(10) { 5.5 }).decide() as Decision.Speed
-        assertThat(small.speed).isEqualTo(1f - config.speedStep) // never rounded to "no change"
+        val tiny = controllerWith(*DoubleArray(10) { config.deadbandMs + 0.5 }).decide() as Decision.Speed
+        assertThat(tiny.speed).isLessThan(1f) // never rounded to "no change"
+        assertThat(tiny.speed).isAtLeast(1f - 4 * config.speedStep)
+    }
+
+    @Test
+    fun `small errors get gentle nudges, large ones the full range`() {
+        val small = controllerWith(*DoubleArray(10) { 15.0 }).decide() as Decision.Speed
+        assertThat(small.speed).isEqualTo(1f - config.smallErrorMaxNudge) // 15/1500 = 1% capped to 0.5%
+        val large = controllerWith(*DoubleArray(10) { -60.0 }).decide() as Decision.Speed
+        assertThat(large.speed).isWithin(1e-6f).of(1f + 0.04f.coerceAtMost(config.maxSpeedNudge))
     }
 
     @Test

@@ -207,7 +207,12 @@ class SimulatedPlayer(
         }
     }
 
+    /** How often the speed actually changed (each change is a potential audible artefact). */
+    var speedChanges = 0
+        private set
+
     override fun setSpeed(speed: Float) {
+        if (speed != this.speed) speedChanges++
         val now = trueMs()
         if (playWhenReady && now > audibleFromMs) {
             basePos = truePositionMs()

@@ -141,8 +141,11 @@ class SyncSimulationTest {
             val group = Group(this, seed, clientCount = 3, config)
             startPlaying(group)
             advanceTimeBy(15_000) // first-ever start (latency not learned yet) + convergence
+            val changesBefore = group.phones.sumOf { it.player.speedChanges }
             val worst = worstErrorOver(group, 90_000)
-            println("seed=$seed worst error over 90 s: ${"%.2f".format(worst)} ms; start latency learned=" +
+            val changesPerMin = (group.phones.sumOf { it.player.speedChanges } - changesBefore) / 1.5 / group.phones.size
+            println("seed=$seed worst error over 90 s: ${"%.2f".format(worst)} ms; speed changes/min/phone " +
+                "%.1f; start latency learned=".format(changesPerMin) +
                 group.phones.joinToString { "%.0f/%d".format(it.latency.startLatencyMs, it.player.startLatencyMs) })
             assertThat(worst).isAtMost(5.0)
             group.phones.forEach { assertThat(it.follower.phase).isEqualTo(FollowerPhase.LOCKED) }
