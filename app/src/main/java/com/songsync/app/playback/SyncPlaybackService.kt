@@ -26,6 +26,7 @@ import coil3.toBitmap
 import com.songsync.app.MainActivity
 import com.songsync.app.R
 import com.songsync.app.SongSyncApp
+import com.songsync.app.session.SessionManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -81,6 +82,8 @@ class SyncPlaybackService : Service() {
             ACTION_NEXT -> manager.skipNext()
             ACTION_LEAVE -> manager.leave()
         }
+        // E.g. a stale notification button after the session ended: don't linger.
+        if (manager.state.value == SessionManager.State.Idle) stopSelf()
         return START_NOT_STICKY
     }
 

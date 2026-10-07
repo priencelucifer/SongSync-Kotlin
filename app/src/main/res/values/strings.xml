@@ -30,6 +30,7 @@
     <string name="error_radio">Bluetooth or Wi-Fi is off or busy. Turn them on and try again.</string>
     <string name="error_nearby_busy">Another app is using Nearby right now. Close it and try again.</string>
     <string name="error_nearby">Nearby connection error: %1$s</string>
+    <string name="error_background_start">Keep SongSync open while connecting so it can keep playing with the screen off.</string>
 
     <!-- Common -->
     <string name="back">Back</string>

@@ -80,6 +80,7 @@ class PlaybackFollower(
 
     private val drift = DriftController(config)
     private var scheduled: Cancellable? = null
+    private var deferredEvaluation: Cancellable? = null
     private var armedSeq = NONE
     private var settleUntilNs = 0L
     private val settleSamples = ArrayList<Double>(SETTLE_SAMPLES)
@@ -132,8 +133,18 @@ class PlaybackFollower(
         evaluate()
     }
 
-    /** Call when the player's readiness or playing state changes. */
-    fun onPlayerChanged() = evaluate()
+    /**
+     * Call when the player's readiness or playing state changes. Players (ExoPlayer included)
+     * report changes synchronously from inside play()/pause(), so re-evaluating right away would
+     * re-enter the follower mid-decision; the evaluation is deferred and coalesced instead.
+     */
+    fun onPlayerChanged() {
+        if (deferredEvaluation != null) return
+        deferredEvaluation = scheduler.schedule(clock.nowNs()) {
+            deferredEvaluation = null
+            evaluate()
+        }
+    }
 
     /** Call every [SyncConfig.tickMs]. */
     fun tick() {
@@ -144,6 +155,8 @@ class PlaybackFollower(
 
     /** Forget the session (timeline and clock); used when leaving a group. */
     fun reset() {
+        deferredEvaluation?.cancel()
+        deferredEvaluation = null
         stopAll(FollowerPhase.IDLE)
         state = PlaybackState.Idle
         offsetTargetNs = null

@@ -233,6 +233,7 @@ class SessionManager(
 
     fun startHosting() {
         if (_state.value != State.Idle) return
+        startForegroundService()
         scope.launch {
             teardownJob?.join()
             leaving = false
@@ -302,6 +303,7 @@ class SessionManager(
         discoveryJob?.cancel()
         discoveryJob = null
         transport.stopAll()
+        if (_state.value is State.Connecting) SyncPlaybackService.stop(context)
         if (_state.value is State.Discovering || _state.value is State.Connecting) _state.value = State.Idle
     }
 
@@ -315,6 +317,7 @@ class SessionManager(
         discoveryJob?.cancel()
         transport.stopDiscovery() // discovering while connecting makes Nearby much less reliable
         _state.value = State.Connecting(host)
+        startForegroundService()
         scope.launch {
             deviceName = settings.deviceName.first()
             try {
@@ -421,7 +424,18 @@ class SessionManager(
             }
             launch { recoverFromPlaybackErrors() }
         }
-        SyncPlaybackService.start(context)
+    }
+
+    /**
+     * Must run while handling the user's tap: Android 12+ refuses to start foreground services
+     * from the background, and a client only finishes connecting a few seconds later.
+     */
+    private fun startForegroundService() {
+        try {
+            SyncPlaybackService.start(context)
+        } catch (_: IllegalStateException) { // ForegroundServiceStartNotAllowedException
+            report(R.string.error_background_start)
+        }
     }
 
     /** A dropped connection mid-song should not end the party: retry with backoff. */
@@ -517,6 +531,7 @@ class SessionManager(
     }
 
     private fun backToDiscovery() {
+        SyncPlaybackService.stop(context)
         _state.value = State.Idle
         transport.stopAll()
         startDiscovery()
