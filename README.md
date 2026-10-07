@@ -95,13 +95,29 @@ Nearby Connections does not work in the emulator, so final checks need two or mo
 
 1. Host on one phone, join from the list on the others. Play, pause, seek, skip.
 2. Settings → Sync diagnostics: the sync error should stay within about ±10 ms.
-3. Host → **Auto-calibrate echo** (phones in place, volume up, room quiet), then **Play sync test**. Record the
-   phones with a laptop mic and measure the gap between clicks in Audacity: the target is ≤ 20 ms (inaudible
-   as echo).
+3. Host → **Auto-calibrate echo** (phones in place, volume up, room quiet), then **Check sync**: it measures
+   each phone against the host with the microphone and changes nothing. Targets: spread ≤ 2 ms excellent,
+   ≤ 5 ms good, ≤ 10 ms acceptable; above about 8 ms an echo becomes audible on sharp sounds.
 4. Lock the screens for 10 minutes: playback continues.
 5. Turn Wi-Fi/Bluetooth off and on on a client: it keeps playing, rejoins, and re-syncs.
 6. Join mid-song; take a phone call on a client (it pauses and re-syncs afterwards).
 7. Jank: `adb shell dumpsys gfxinfo com.songsync.app` while scrolling results and with the player open.
+
+### Independent sync measurement (external recording)
+
+An outside check on **Check sync** that also shows slow drift over a whole song:
+
+1. Put the phones in a row, each about 10 cm from a laptop (or a spare phone) microphone, all at the same
+   distance. Sound travels about 2.9 ms per metre, so unequal distances show up as fake offsets.
+2. Host → **Play sync test** (click track), volume up on every phone, room quiet.
+3. Record 5 minutes (Audacity, 48 kHz).
+4. Zoom in on one click at 0:30, 2:30 and 4:30 and note the time between the first and last onset of that
+   click. That is the spread.
+5. Swap the phones' positions and repeat: an offset that follows the phone is the phone's; one that stays
+   with the position is geometry.
+
+Three runs should agree within about 0.5 ms. A spread that grows from 0:30 to 4:30 means drift is not being
+corrected (phone clocks differ by up to about 80 ppm, which is about 5 ms per minute uncorrected).
 
 ## Project layout
 
