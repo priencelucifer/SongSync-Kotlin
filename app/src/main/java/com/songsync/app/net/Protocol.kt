@@ -75,7 +75,25 @@ data class ClientStatus(
     val onHold: Boolean,
     /** What this phone is actually decoding (optional: older clients do not send it). */
     val format: AudioFormatInfo? = null,
+    /** Device and sync details for the host's sync report (optional). */
+    val diag: DeviceDiag? = null,
 ) : Message
+
+/** One phone's device and sync details, as shown in the host's sync report. */
+@Serializable
+data class DeviceDiag(
+    val model: String,
+    val sdk: Int,
+    val appVersion: String,
+    /** Audio output, e.g. "SPEAKER" or "BLUETOOTH JBL Flip 5". */
+    val route: String,
+    val startLatencyMs: Double,
+    val calibrationMs: Double,
+    val clockSpreadMs: Double? = null,
+    val clockSkewPpm: Double? = null,
+    val hardResyncs: Int = 0,
+    val phase: String = "",
+)
 
 /**
  * The audio a phone decodes for [trackKey]. Two phones playing different files of the same song

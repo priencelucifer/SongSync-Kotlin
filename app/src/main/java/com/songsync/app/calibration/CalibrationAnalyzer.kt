@@ -3,8 +3,18 @@ package com.songsync.app.calibration
 import com.songsync.app.sync.NANOS_PER_MS
 import com.songsync.app.sync.PlaybackState
 
-/** A microphone recording with the local (host) monotonic time of its first sample. */
-class Recording(val samples: ShortArray, val size: Int, val sampleRate: Int, val startTimeNs: Long)
+/**
+ * A microphone recording with the local (host) monotonic time of its first sample. [source] and
+ * [timestamped] (audio timestamps vs read timing) describe how it was made, for the sync report.
+ */
+class Recording(
+    val samples: ShortArray,
+    val size: Int,
+    val sampleRate: Int,
+    val startTimeNs: Long,
+    val source: String = "",
+    val timestamped: Boolean = true,
+)
 
 /**
  * Turns the host's recording of a calibration run into per-phone corrections.

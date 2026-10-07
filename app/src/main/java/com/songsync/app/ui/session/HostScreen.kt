@@ -73,6 +73,7 @@ import com.songsync.app.ui.components.TrackArtwork
 import com.songsync.app.ui.components.TrackRow
 import com.songsync.app.ui.components.artistOrUnknown
 import com.songsync.app.ui.components.linkLabel
+import com.songsync.app.ui.components.MicRun
 import com.songsync.app.ui.components.rememberCalibrationStarter
 import com.songsync.app.ui.components.rememberPlaybackPosition
 import com.songsync.app.ui.player.PlayerContent
@@ -103,7 +104,10 @@ fun HostScreen(
     val startCalibration = rememberCalibrationStarter(vm) {
         onMessage(resources.getString(R.string.calibration_mic_denied))
     }
-    val startSyncCheck = rememberCalibrationStarter(vm, measureOnly = true) {
+    val startSyncCheck = rememberCalibrationStarter(vm, MicRun.CHECK) {
+        onMessage(resources.getString(R.string.calibration_mic_denied))
+    }
+    val startSyncReport = rememberCalibrationStarter(vm, MicRun.REPORT) {
         onMessage(resources.getString(R.string.calibration_mic_denied))
     }
 
@@ -153,6 +157,14 @@ fun HostScreen(
                                 onClick = {
                                     menuOpen = false
                                     startSyncCheck()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sync_report_button)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_graphic_eq), contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    startSyncReport()
                                 },
                             )
                             DropdownMenuItem(

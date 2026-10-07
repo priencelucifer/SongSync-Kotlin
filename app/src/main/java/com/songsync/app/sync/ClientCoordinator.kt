@@ -5,6 +5,7 @@ import com.songsync.app.net.Bye
 import com.songsync.app.net.CalibrationPlan
 import com.songsync.app.net.CalibrationResult
 import com.songsync.app.net.ClientStatus
+import com.songsync.app.net.DeviceDiag
 import com.songsync.app.net.Hello
 import com.songsync.app.net.LoadTrack
 import com.songsync.app.net.Message
@@ -90,6 +91,9 @@ class ClientCoordinator(
 
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 4)
     val events: SharedFlow<Event> = _events.asSharedFlow()
+
+    /** Device details for the host's sync report, sent with each status (set by the session). */
+    var diag: () -> DeviceDiag? = { null }
 
     /** Set by the UI/session when this phone is paused locally. Reported to the host. */
     var onHold = false
@@ -250,6 +254,7 @@ class ClientCoordinator(
                 syncErrorMs = status.errorMs?.roundToInt(),
                 rttMs = clockSync.estimate?.let { (it.p90RttNs / NANOS_PER_MS).toInt() },
                 format = local.audioFormat?.takeIf { it.trackKey == _track.value?.key },
+                diag = diag(),
                 onHold = onHold,
             ),
         )

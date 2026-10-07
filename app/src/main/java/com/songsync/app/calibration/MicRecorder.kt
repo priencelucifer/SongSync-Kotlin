@@ -40,13 +40,14 @@ class MicRecorder(context: Context) {
             record.release()
             error("Microphone unavailable")
         }
-        return ActiveRecording(record, sampleRate, (maxDurationMs * sampleRate / 1_000).toInt())
+        return ActiveRecording(record, sampleRate, (maxDurationMs * sampleRate / 1_000).toInt(), if (unprocessed) "UNPROCESSED" else "VOICE_RECOGNITION")
     }
 
     class ActiveRecording internal constructor(
         private val record: AudioRecord,
         private val sampleRate: Int,
         maxSamples: Int,
+        private val source: String,
     ) {
         private val buffer = ShortArray(maxSamples)
         @Volatile private var size = 0
@@ -88,8 +89,8 @@ class MicRecorder(context: Context) {
         fun stop(): Recording {
             running = false
             worker.join(2_000)
-            val start = timestampStartNs ?: readEstimateNs
-            return Recording(buffer, size, sampleRate, start)
+            val stamped = timestampStartNs
+            return Recording(buffer, size, sampleRate, stamped ?: readEstimateNs, source, timestamped = stamped != null)
         }
     }
 }
