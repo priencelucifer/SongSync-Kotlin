@@ -42,7 +42,11 @@ class ClockSync(
         val skewPpm: Double? = null,
     )
 
-    private data class Sample(val offsetNs: Long, val rttNs: Long, val atNs: Long)
+    private data class Sample(val offsetNs: Long, val rttNs: Long, val atNs: Long, val sentNs: Long)
+
+    /** Set by [markEpoch]: samples sent before this belong to the previous link. */
+    private var epochStartNs: Long? = null
+    private var epochMinSamples = 0
 
     private val samples = ArrayDeque<Sample>()
     /** (local time, estimated offset) after each sample, for the skew readout. */
@@ -56,10 +60,28 @@ class ClockSync(
         val rtt = (t3 - t0) - (t2 - t1)
         if (rtt < 0 || t3 < t0 || t2 < t1) return false
         val offset = ((t1 - t0) + (t2 - t3)) / 2
-        samples.addLast(Sample(offset, rtt, t3))
+        samples.addLast(Sample(offset, rtt, t3, t0))
         while (samples.size > maxWindow) samples.removeFirst()
+        epochStartNs?.let { start ->
+            if (samples.count { it.sentNs >= start } >= epochMinSamples) {
+                samples.removeAll { it.sentNs < start }
+                history.clear() // the old link's offsets would show up as fake drift
+                epochStartNs = null
+            }
+        }
         recompute(t3)
         return true
+    }
+
+    /**
+     * The link changed (e.g. Nearby upgraded from Bluetooth to Wi-Fi), so delays and their
+     * asymmetry changed too. The current estimate stays until [minNewSamples] exchanges sent
+     * after [atNs] have arrived; then every older sample is dropped, instead of lingering in the
+     * window (up to a minute on a jittery link).
+     */
+    fun markEpoch(atNs: Long, minNewSamples: Int) {
+        epochStartNs = atNs
+        epochMinSamples = max(1, minNewSamples)
     }
 
     /** Short window on clean links, long window when round trips are erratic. */
@@ -74,6 +96,7 @@ class ClockSync(
     fun reset() {
         samples.clear()
         history.clear()
+        epochStartNs = null
         estimate = null
     }
 

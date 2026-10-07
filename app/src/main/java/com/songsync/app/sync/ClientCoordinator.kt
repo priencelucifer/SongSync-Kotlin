@@ -155,6 +155,7 @@ class ClientCoordinator(
             is TransportEvent.Received -> ProtocolCodec.decode(event.bytes)?.let { handle(it, event.receivedAtNs) }
             is TransportEvent.BandwidthChanged -> {
                 _linkQuality.value = event.quality
+                clockSync.markEpoch(clock.nowNs(), config.minClockSamples)
                 scope.launch { timeSyncBurst() }
             }
             else -> Unit

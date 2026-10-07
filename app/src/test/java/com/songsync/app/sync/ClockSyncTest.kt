@@ -101,6 +101,29 @@ class ClockSyncTest {
     }
 
     @Test
+    fun `after a link change the old link's biased samples are dropped once enough new ones arrive`() {
+        val sync = ClockSync()
+        var now = 0L
+        // Old link: fast but asymmetric (6 ms more on the way back), so every sample is 3 ms off.
+        repeat(40) {
+            sync.exchange(now, up = 2_000_000, hostProcessing = 100_000, down = 8_000_000)
+            now += 1_000_000_000
+        }
+        assertThat((sync.estimate!!.offsetNs - trueOffsetNs) / 1e6).isWithin(0.01).of(-3.0)
+
+        sync.markEpoch(now, minNewSamples = 4)
+        // New link: symmetric but slower; the fastest-quarter filter alone would keep the old samples.
+        repeat(3) {
+            sync.exchange(now, up = 6_000_000, hostProcessing = 100_000, down = 6_000_000)
+            now += 1_000_000_000
+            assertThat((sync.estimate!!.offsetNs - trueOffsetNs) / 1e6).isWithin(0.01).of(-3.0) // not yet
+        }
+        sync.exchange(now, up = 6_000_000, hostProcessing = 100_000, down = 6_000_000)
+        assertThat(sync.estimate!!.offsetNs).isEqualTo(trueOffsetNs)
+        assertThat(sync.estimate!!.samples).isEqualTo(4)
+    }
+
+    @Test
     fun `impossible samples are rejected`() {
         val sync = ClockSync()
         assertThat(sync.addSample(t0 = 100, t1 = 50, t2 = 40, t3 = 120)).isFalse() // t2 < t1
