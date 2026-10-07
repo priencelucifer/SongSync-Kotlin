@@ -22,6 +22,7 @@ import com.songsync.app.net.NearbyTransport
 import com.songsync.app.net.PROTOCOL_VERSION
 import com.songsync.app.net.RejectReason
 import com.songsync.app.net.TransportEvent
+import com.songsync.app.net.differentFile
 import com.songsync.app.playback.AudioRouteMonitor
 import com.songsync.app.playback.DeviceLocalPlayback
 import com.songsync.app.playback.MediaControls
@@ -54,6 +55,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -91,6 +93,8 @@ data class PeerUi(
     val rttMs: Int?,
     /** Nearby link quality (1 low/Bluetooth .. 3 high), if known. */
     val linkQuality: Int? = null,
+    /** True when this phone decodes a different file of the song than the host (constant offset risk). */
+    val differentFile: Boolean = false,
 )
 
 /** Progress and outcome of an automatic echo calibration (host). */
@@ -119,6 +123,8 @@ data class SyncStats(
     /** Seconds since the newest clock sample arrived. */
     val clockAgeS: Double? = null,
     val clockSkewPpm: Double? = null,
+    /** What this phone is decoding ([AudioFormatInfo.summary]). */
+    val format: String? = null,
 )
 
 /**
@@ -229,7 +235,7 @@ class SessionManager(
     val peers: StateFlow<List<PeerUi>> = _host
         .flatMapLatest { h ->
             if (h == null) flowOf(emptyList())
-            else combine(h.peers, h.track, onHold, _stats) { peers, track, hold, stats ->
+            else combine(h.peers, h.track, onHold, _stats, engine.audioFormat) { peers, track, hold, stats, hostFormat ->
                 val self = PeerUi(
                     id = "self",
                     name = deviceName,
@@ -253,6 +259,7 @@ class SessionManager(
                         syncErrorMs = p.status?.syncErrorMs,
                         rttMs = p.status?.rttMs,
                         linkQuality = p.linkQuality,
+                        differentFile = differentFile(hostFormat, p.status?.format, key),
                     )
                 }
             }
@@ -572,12 +579,17 @@ class SessionManager(
                         clockSpreadMs = estimate?.let { it.offsetSpreadNs.toDouble() / NANOS_PER_MS },
                         clockAgeS = estimate?.let { (clock.nowNs() - it.newestSampleAtNs) / 1e9 },
                         clockSkewPpm = estimate?.skewPpm,
+                        format = engine.audioFormat.value?.summary(),
                     )
                     delay(STATS_INTERVAL_MS)
                 }
             }
             launch { recoverFromPlaybackErrors() }
             launch { gateCalibrationPlayback() }
+            launch {
+                engine.audioFormat.filterNotNull().distinctUntilChangedBy { it.copy(decoder = null) }
+                    .collect { log("format ${it.summary()}") }
+            }
         }
     }
 

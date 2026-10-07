@@ -281,6 +281,7 @@ fun DiagnosticsPanel(stats: SyncStats, log: List<String>, modifier: Modifier = M
         DiagnosticRow(R.string.diag_start_latency, "%.1f ms".format(f.startLatencyMs))
         DiagnosticRow(R.string.diag_resyncs, f.hardResyncs.toString())
         DiagnosticRow(R.string.diag_link, linkLabel(stats.linkQuality))
+        DiagnosticRow(R.string.diag_format, stats.format ?: "–")
         if (log.isNotEmpty()) {
             Text(
                 stringResource(R.string.diag_log),

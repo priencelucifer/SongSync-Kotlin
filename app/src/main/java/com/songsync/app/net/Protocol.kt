@@ -73,7 +73,48 @@ data class ClientStatus(
     val syncErrorMs: Int?,
     val rttMs: Int?,
     val onHold: Boolean,
+    /** What this phone is actually decoding (optional: older clients do not send it). */
+    val format: AudioFormatInfo? = null,
 ) : Message
+
+/**
+ * The audio a phone decodes for [trackKey]. Two phones playing different files of the same song
+ * (another YouTube itag, another bitrate, different encoder priming) can be offset by a constant
+ * 6-120 ms that position-based sync cannot see, so the host compares these.
+ */
+@Serializable
+data class AudioFormatInfo(
+    val trackKey: String,
+    val mime: String? = null,
+    val sampleRate: Int = 0,
+    val channels: Int = 0,
+    /** Priming samples trimmed at the start (0 when the file does not say). */
+    val encoderDelay: Int = 0,
+    val encoderPadding: Int = 0,
+    val bitrateKbps: Int? = null,
+    /** YouTube stream format id, when the stream came from YouTube. */
+    val itag: Int? = null,
+    /** Decoder name; legitimately differs between phone models, so not part of [sameContentAs]. */
+    val decoder: String? = null,
+) {
+    fun sameContentAs(other: AudioFormatInfo): Boolean = copy(decoder = null, bitrateKbps = null) ==
+        other.copy(decoder = null, bitrateKbps = null) && (bitrateKbps == null || other.bitrateKbps == null || bitrateKbps == other.bitrateKbps)
+
+    /** Short form for the diagnostics panel, e.g. "mp4a-latm 44.1 kHz 2ch d2112 itag140 128k". */
+    fun summary(): String = listOfNotNull(
+        mime?.substringAfter('/'),
+        if (sampleRate > 0) "%.1f kHz".format(sampleRate / 1000.0) else null,
+        if (channels > 0) "${channels}ch" else null,
+        "d$encoderDelay",
+        itag?.let { "itag$it" },
+        bitrateKbps?.let { "${it}k" },
+    ).joinToString(" ")
+}
+
+/** True when both formats are known for [trackKey] and describe different files. */
+fun differentFile(host: AudioFormatInfo?, peer: AudioFormatInfo?, trackKey: String?): Boolean =
+    trackKey != null && host != null && peer != null &&
+        host.trackKey == trackKey && peer.trackKey == trackKey && !host.sameContentAs(peer)
 
 /** Host -> one client: your slot in the upcoming echo-calibration track (only audible then). */
 @Serializable

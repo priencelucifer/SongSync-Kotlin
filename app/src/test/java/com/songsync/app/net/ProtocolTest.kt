@@ -36,6 +36,7 @@ class ProtocolTest {
             StateUpdate(state),
             ClientStatus(track.key, ready = true, syncErrorMs = -3, rttMs = 18, onHold = false),
             ClientStatus(null, ready = false, syncErrorMs = null, rttMs = null, onHold = true),
+            ClientStatus(track.key, ready = true, syncErrorMs = 1, rttMs = 9, onHold = false, format = aac),
             CalibrationPlan(track.key, slot = 2),
             CalibrationResult(correctionMs = -12.5),
             CalibrationResult(correctionMs = null),
@@ -57,4 +58,32 @@ class ProtocolTest {
         val withExtra = """{"t":"ready","trackKey":"k","addedInV2":true}""".encodeToByteArray()
         assertThat(ProtocolCodec.decode(withExtra)).isEqualTo(TrackReady("k"))
     }
+
+    @Test
+    fun `status from an older client without a format still decodes`() {
+        val old = """{"t":"status","trackKey":"k","ready":true,"syncErrorMs":2,"rttMs":12,"onHold":false}"""
+        assertThat(ProtocolCodec.decode(old.encodeToByteArray()))
+            .isEqualTo(ClientStatus("k", ready = true, syncErrorMs = 2, rttMs = 12, onHold = false, format = null))
+    }
+
+    @Test
+    fun `phones playing different files of the same song are told apart`() {
+        val key = track.key
+        val sameOtherDecoder = aac.copy(decoder = "OMX.qcom.audio.decoder.aac")
+        val otherItag = aac.copy(itag = 251, mime = "audio/opus", sampleRate = 48_000, encoderDelay = 312)
+        val otherPriming = aac.copy(encoderDelay = 1024)
+
+        assertThat(differentFile(aac, sameOtherDecoder, key)).isFalse() // decoders differ by phone model
+        assertThat(differentFile(aac, aac.copy(bitrateKbps = null), key)).isFalse() // unknown bitrate
+        assertThat(differentFile(aac, otherItag, key)).isTrue()
+        assertThat(differentFile(aac, otherPriming, key)).isTrue()
+        assertThat(differentFile(aac, aac.copy(bitrateKbps = 96), key)).isTrue()
+        assertThat(differentFile(aac, otherItag.copy(trackKey = "other"), key)).isFalse() // stale report
+        assertThat(differentFile(aac, null, key)).isFalse()
+    }
+
+    private val aac = AudioFormatInfo(
+        trackKey = track.key, mime = "audio/mp4a-latm", sampleRate = 44_100, channels = 2,
+        encoderDelay = 2112, encoderPadding = 1000, bitrateKbps = 128, itag = 140, decoder = "c2.android.aac.decoder",
+    )
 }

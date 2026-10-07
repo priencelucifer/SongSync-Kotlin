@@ -2,6 +2,7 @@ package com.songsync.app.sync
 
 import com.songsync.app.data.model.ResolvedTrack
 import com.songsync.app.data.model.Track
+import com.songsync.app.net.AudioFormatInfo
 
 /** This phone's playback, as seen by the host/client coordinators. */
 interface LocalPlayback {
@@ -9,6 +10,9 @@ interface LocalPlayback {
 
     /** Duration of the loaded track once the player knows it. */
     val durationMs: Long?
+
+    /** What the player is decoding, once known (for spotting phones playing different files). */
+    val audioFormat: AudioFormatInfo? get() = null
 
     /**
      * Turns [track] into a stream URL. With [allowAlternatives] (host only) a blocked YouTube

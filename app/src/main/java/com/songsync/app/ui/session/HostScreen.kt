@@ -383,6 +383,7 @@ private fun PeerRow(peer: PeerUi) {
         stateText,
         peer.rttMs?.let { stringResource(R.string.peer_rtt, it) },
         peer.linkQuality?.let { linkLabel(it) },
+        if (peer.differentFile) stringResource(R.string.peer_different_file) else null,
     ).joinToString(" · ")
     ListItem(
         headlineContent = { Text(if (peer.isSelf) stringResource(R.string.devices_this_phone, peer.name) else peer.name) },

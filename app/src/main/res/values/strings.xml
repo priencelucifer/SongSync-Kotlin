@@ -148,6 +148,7 @@
     <string name="peer_failed">Can\'t play this song</string>
     <string name="peer_hold">Paused</string>
     <string name="peer_rtt">%1$d ms link</string>
+    <string name="peer_different_file">Different file than this phone (may be offset)</string>
 
     <!-- Client -->
     <string name="client_title">Listening with %1$s</string>
@@ -180,6 +181,7 @@
     <string name="diag_start_latency">Learned start latency</string>
     <string name="diag_resyncs">Hard resyncs</string>
     <string name="diag_link">Link</string>
+    <string name="diag_format">Playing file</string>
     <string name="diag_log">Recent events</string>
     <string name="link_low">Bluetooth link</string>
     <string name="link_medium">Wi-Fi link</string>

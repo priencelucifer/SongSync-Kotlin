@@ -249,6 +249,7 @@ class ClientCoordinator(
                 ready = ready is LoadStatus.Ready && ready.trackKey == _track.value?.key,
                 syncErrorMs = status.errorMs?.roundToInt(),
                 rttMs = clockSync.estimate?.let { (it.p90RttNs / NANOS_PER_MS).toInt() },
+                format = local.audioFormat?.takeIf { it.trackKey == _track.value?.key },
                 onHold = onHold,
             ),
         )

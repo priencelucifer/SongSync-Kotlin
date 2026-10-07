@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -15,11 +16,14 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.songsync.app.data.model.ResolvedTrack
 import com.songsync.app.data.source.NewPipeDownloader
 import com.songsync.app.data.source.YouTubeStreamInterceptor
+import com.songsync.app.net.AudioFormatInfo
 import com.songsync.app.sync.SyncPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +53,14 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
 
     override var loadedTrackKey: String? = null
         private set
+
+    private val _audioFormat = MutableStateFlow<AudioFormatInfo?>(null)
+    /** What is being decoded for the loaded track: file format, encoder priming, decoder. */
+    val audioFormat: StateFlow<AudioFormatInfo?> = _audioFormat.asStateFlow()
+
+    /** YouTube stream format id of the loaded stream URL, if it has one. */
+    private var loadedItag: Int? = null
+    private var audioDecoder: String? = null
 
     init {
         val app = context.applicationContext
@@ -99,6 +111,38 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
                 onStateChanged?.invoke()
             }
         })
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioInputFormatChanged(
+                eventTime: AnalyticsListener.EventTime,
+                format: Format,
+                decoderReuseEvaluation: DecoderReuseEvaluation?,
+            ) {
+                val key = player.currentMediaItem?.mediaId ?: return
+                val bitrate = format.averageBitrate.takeIf { it > 0 } ?: format.bitrate.takeIf { it > 0 }
+                _audioFormat.value = AudioFormatInfo(
+                    trackKey = key,
+                    mime = format.sampleMimeType,
+                    sampleRate = format.sampleRate.coerceAtLeast(0),
+                    channels = format.channelCount.coerceAtLeast(0),
+                    encoderDelay = format.encoderDelay,
+                    encoderPadding = format.encoderPadding,
+                    bitrateKbps = bitrate?.let { it / 1000 },
+                    itag = loadedItag,
+                    decoder = audioDecoder,
+                )
+            }
+
+            override fun onAudioDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                // May arrive before or after the input format, depending on the renderer.
+                audioDecoder = decoderName
+                _audioFormat.value = _audioFormat.value?.copy(decoder = decoderName)
+            }
+        })
     }
 
     // --- SyncPlayer --------------------------------------------------------------------------
@@ -134,6 +178,8 @@ class PlayerEngine(context: Context, okHttp: OkHttpClient) : SyncPlayer {
             .apply { if (track.artworkUrl.isNotBlank()) setArtworkUri(track.artworkUrl.toUri()) }
             .build()
         player.pause()
+        _audioFormat.value = null
+        loadedItag = runCatching { resolved.streamUrl.toUri().getQueryParameter("itag")?.toIntOrNull() }.getOrNull()
         player.setMediaItem(
             MediaItem.Builder().setUri(resolved.streamUrl).setMediaId(track.key).setMediaMetadata(metadata).build(),
         )
