@@ -547,17 +547,19 @@ class SessionManager(
             @Suppress("DEPRECATION") // still returned by older Play services versions
             ConnectionsStatusCodes.MISSING_SETTING_LOCATION_MUST_BE_ON,
             -> report(R.string.error_location_off)
+            // The code is included so a report from a user pinpoints exactly what Nearby rejected.
+            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_COARSE_LOCATION,
+            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_FINE_LOCATION,
+            -> report(R.string.error_permission_location, code)
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH,
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_ADMIN,
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_SCAN,
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_ADVERTISE,
             ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_CONNECT,
-            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_COARSE_LOCATION,
-            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_FINE_LOCATION,
             ConnectionsStatusCodes.MISSING_PERMISSION_NEARBY_WIFI_DEVICES,
             ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_WIFI_STATE,
             ConnectionsStatusCodes.MISSING_PERMISSION_CHANGE_WIFI_STATE,
-            -> report(R.string.error_permissions)
+            -> report(R.string.error_permissions, code)
             ConnectionsStatusCodes.STATUS_RADIO_ERROR -> report(R.string.error_radio)
             ConnectionsStatusCodes.API_CONNECTION_FAILED_ALREADY_IN_USE -> report(R.string.error_nearby_busy)
             null -> report(R.string.error_nearby, e.message ?: e.javaClass.simpleName)

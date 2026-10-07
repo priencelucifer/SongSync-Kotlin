@@ -22,9 +22,10 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH_SCAN"
         tools:ignore="NearbyDevicesPermissionRequirement" />
-    <uses-permission
-        android:name="android.permission.ACCESS_COARSE_LOCATION"
-        android:maxSdkVersion="32" />
+    <!-- Approximate location on every version: Play services' discovery rejects apps without it
+         (MISSING_PERMISSION_ACCESS_COARSE_LOCATION) even on Android 13+, where Google's docs
+         say it is not needed. The location itself is never read. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="32" />
@@ -32,6 +33,7 @@
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="33" />
+    <!-- When raising targetSdk to 37+: Nearby also needs ACCESS_LOCAL_NETWORK (runtime) for Wi-Fi LAN. -->
 
     <!-- Keeps playback and the group connection alive with the screen off -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

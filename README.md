@@ -114,6 +114,9 @@ baselineprofile/  Baseline profile generator
 - Bluetooth speakers and headphones add latency that phones report inconsistently; that is what the
   per-output calibration is for.
 - Nearby works best when it can use Wi-Fi; on Bluetooth-only links the clock estimate is noisier.
+- "Join a group" asks for approximate location even on Android 13+: Google's documentation says it is not
+  needed, but Play services' discovery fails with `MISSING_PERMISSION_ACCESS_COARSE_LOCATION` (8034) without
+  it. The app never reads the location. Nearby errors shown in the app include the status code.
 
 ## License
 

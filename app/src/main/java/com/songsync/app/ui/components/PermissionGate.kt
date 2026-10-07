@@ -79,7 +79,7 @@ fun rememberPermissionGate(): PermissionGate {
             confirm = stringResource(R.string.continue_action),
             onConfirm = {
                 gate.dialog = null
-                launcher.launch((NearbyPermissions.required + NearbyPermissions.optional).toTypedArray())
+                launcher.launch(NearbyPermissions.toRequest.toTypedArray())
             },
             onDismiss = {
                 gate.dialog = null
