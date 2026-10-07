@@ -1,4 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SongSync</string>
+
+    <!-- Media actions -->
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_next">Next</string>
+    <string name="action_leave">Leave</string>
+
+    <!-- Notification -->
+    <string name="notification_channel">Group session</string>
+    <string name="notification_channel_description">Shown while this phone is hosting or listening in a group</string>
+    <string name="notification_hosting">Hosting a group</string>
+    <string name="notification_joined">Listening with %1$s</string>
+    <string name="notification_reconnecting">Reconnecting to %1$s…</string>
+
+    <!-- Messages and errors -->
+    <string name="error_load_failed">Couldn\'t play “%1$s”. %2$s</string>
+    <string name="error_peer_failed">%1$s couldn\'t load the song and will skip it</string>
+    <string name="error_version_mismatch">%1$s is running a different SongSync version. Update both phones.</string>
+    <string name="error_group_locked">%1$s\'s group is locked</string>
+    <string name="message_host_left">%1$s ended the group</string>
+    <string name="error_connect_failed">Couldn\'t connect to %1$s. Try again.</string>
+    <string name="error_lost_host">Lost the connection to %1$s</string>
+    <string name="error_playback">Playback stopped on this phone (%1$s)</string>
+    <string name="error_playback_retrying">Network hiccup, reconnecting the stream…</string>
+    <string name="error_location_off">Turn on Location in your phone\'s settings to find nearby phones</string>
+    <string name="error_permissions">SongSync needs the Nearby devices permission to connect phones</string>
+    <string name="error_radio">Bluetooth or Wi-Fi is off or busy. Turn them on and try again.</string>
+    <string name="error_nearby_busy">Another app is using Nearby right now. Close it and try again.</string>
+    <string name="error_nearby">Nearby connection error: %1$s</string>
 </resources>

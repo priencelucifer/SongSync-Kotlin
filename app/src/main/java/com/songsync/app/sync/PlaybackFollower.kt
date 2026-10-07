@@ -142,8 +142,14 @@ class PlaybackFollower(
         measure()
     }
 
-    fun release() {
-        cancelScheduled()
+    /** Forget the session (timeline and clock); used when leaving a group. */
+    fun reset() {
+        stopAll(FollowerPhase.IDLE)
+        state = PlaybackState.Idle
+        offsetTargetNs = null
+        appliedOffsetNs = 0
+        lastErrorMs = null
+        hardResyncs = 0
     }
 
     // --- decisions ---------------------------------------------------------------------------
