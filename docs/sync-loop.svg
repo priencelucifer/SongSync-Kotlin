@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="Illustration: three phones start tens of milliseconds apart and are pulled into the 2.5 ms dead-band within a few seconds by small playback-speed nudges">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17132B"/>
+      <stop offset="1" stop-color="#0F0D16"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="400" rx="24" fill="url(#bg)"/>
+
+  <g font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="60" y="52" font-size="24" font-weight="700" fill="#FFFFFF">The closed loop</text>
+    <text x="60" y="80" font-size="16" fill="#C9C3DC">Every 100 ms each phone compares what it is playing with the shared timeline and nudges its speed.</text>
+
+    <!-- dead-band -->
+    <rect x="110" y="232.5" width="1000" height="15" fill="#7BE0A0" fill-opacity="0.16"/>
+    <line x1="110" y1="240" x2="1110" y2="240" stroke="#7BE0A0" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="6 6"/>
+
+    <!-- axes -->
+    <g stroke="#FFFFFF" stroke-opacity="0.12">
+      <line x1="110" y1="120" x2="1110" y2="120"/>
+      <line x1="110" y1="180" x2="1110" y2="180"/>
+      <line x1="110" y1="300" x2="1110" y2="300"/>
+      <line x1="110" y1="360" x2="1110" y2="360"/>
+    </g>
+    <g font-size="13" fill="#9C96B0" text-anchor="end">
+      <text x="98" y="124">+40 ms</text>
+      <text x="98" y="184">+20</text>
+      <text x="98" y="244">0</text>
+      <text x="98" y="304">−20</text>
+      <text x="98" y="364">−40</text>
+    </g>
+    <g font-size="13" fill="#9C96B0" text-anchor="middle">
+      <text x="110" y="384">0 s</text>
+      <text x="310" y="384">2 s</text>
+      <text x="510" y="384">4 s</text>
+      <text x="710" y="384">6 s</text>
+      <text x="910" y="384">8 s</text>
+      <text x="1110" y="384">10 s</text>
+    </g>
+
+    <!-- three phones -->
+    <g fill="none" stroke-width="3.5" stroke-linecap="round">
+      <path d="M160,150 C260,150 330,226 430,236 S700,241 1110,239" stroke="#C7B8FF"/>
+      <path d="M160,306 C250,306 330,256 430,245 S700,239 1110,241" stroke="#FFB0C8"/>
+      <path d="M160,204 C240,204 300,232 400,238 S700,240 1110,240" stroke="#8FD3FF"/>
+    </g>
+    <g>
+      <circle cx="160" cy="150" r="6" fill="#C7B8FF"/>
+      <circle cx="160" cy="306" r="6" fill="#FFB0C8"/>
+      <circle cx="160" cy="204" r="6" fill="#8FD3FF"/>
+    </g>
+
+    <!-- annotations -->
+    <text x="176" y="140" font-size="14" fill="#E6DEFF">first start: phones a few tens of ms apart</text>
+    <text x="440" y="200" font-size="14" fill="#E6DEFF">speed nudges, ±2 % for big errors, ±0.5 % near the target</text>
+    <line x1="470" y1="206" x2="420" y2="232" stroke="#E6DEFF" stroke-opacity="0.5"/>
+    <rect x="860" y="262" width="236" height="30" rx="15" fill="#7BE0A0" fill-opacity="0.18" stroke="#7BE0A0" stroke-opacity="0.5"/>
+    <text x="978" y="282" font-size="14" font-weight="600" fill="#7BE0A0" text-anchor="middle">locked: within ±2.5 ms</text>
+    <text x="1110" y="52" font-size="13" fill="#9C96B0" text-anchor="end">illustration · errors over 150 ms are fixed by a re-sync</text>
+  </g>
+</svg>

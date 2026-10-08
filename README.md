@@ -1,33 +1,89 @@
-# SongSync
+<p align="center">
+  <img src="docs/banner.svg" alt="SongSync: play the same song on every phone, perfectly in sync" width="100%">
+</p>
 
-Play the same song on several Android phones at once, in sync, so they sound like one speaker
-system. One phone hosts a group and picks music from JioSaavn or YouTube; nearby phones join over
-Google Nearby Connections (Bluetooth / Wi-Fi, no shared network needed) and every phone streams
-the track itself.
+<p align="center">
+  <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white">
+  <img alt="Media3 ExoPlayer" src="https://img.shields.io/badge/Media3-ExoPlayer-5B3FD9">
+  <img alt="Nearby Connections" src="https://img.shields.io/badge/Google-Nearby%20Connections-34A853?logo=google&logoColor=white">
+  <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue">
+</p>
 
-## Features
+<p align="center">
+  <b>Turn a handful of Android phones into one speaker system.</b><br>
+  One phone hosts and picks the music, the others join, and every phone plays the same song at the same moment.
+</p>
 
-- **Any number of phones.** Host a group, others pick it from a list and can join or rejoin at any time,
-  also mid-song.
-- **Tight sync.** Phones share one timeline and an NTP-style clock estimate; a closed loop nudges playback
-  speed every 100 ms so phones stay within a few milliseconds, without audible jumps.
-- **Echo calibration.** The host's microphone measures each phone's real speaker or Bluetooth delay
-  (**Auto-calibrate echo**) and corrects it, per phone and per audio output.
-- **Sync check and full sync test.** Measure how far apart the phones really sound, and get a one-screen
-  report (devices, clocks, links, files) to share.
-- **Same file everywhere.** The host picks the stream (JioSaavn bitrate with 320 → 160 → 96 kbps fallback,
-  YouTube format), every phone fetches that exact file itself; only IDs are shared.
-- **Keeps playing.** Screen off, lock-screen and headset controls, phone calls; if the link drops, phones
-  keep playing and reconnect automatically for 60 s.
-- **Stays online.** Nearby connections never move phones onto a hotspot, so every phone keeps its internet.
-- **Queue and search** for JioSaavn and YouTube, with a per-phone "pause here" that leaves the group playing.
+---
 
-## How sync works
+## ✨ Features
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>📱 Any number of phones</h3>
+      Host a group; others pick it from a list and can join or rejoin at any time, even mid-song.
+      Phones find each other over Bluetooth and Wi-Fi, no shared network needed.
+    </td>
+    <td width="50%" valign="top">
+      <h3>🎯 Millisecond sync</h3>
+      One shared timeline, an NTP-style clock estimate and a closed loop that gently nudges playback speed
+      every 100 ms keep the phones within a few milliseconds, without audible jumps.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🎙️ Echo calibration</h3>
+      The host's microphone measures each phone's real speaker or Bluetooth delay and corrects it,
+      per phone and per audio output. One tap resets it on every phone.
+    </td>
+    <td valign="top">
+      <h3>📊 Sync check &amp; full test</h3>
+      Measure how far apart the phones really sound, or run the full test for a one-screen report
+      (devices, clocks, links, files) with a Copy button.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🎵 JioSaavn &amp; YouTube</h3>
+      Search, queue and play. The host picks the exact stream (bitrate or format) and every phone fetches
+      that same file itself; only IDs travel between phones.
+    </td>
+    <td valign="top">
+      <h3>🔒 Keeps playing</h3>
+      Screen off, lock-screen and headset controls, phone calls. If the link drops, phones keep playing and
+      reconnect on their own. "Pause here" silences one phone while the group plays on.
+    </td>
+  </tr>
+</table>
+
+## 🔄 How sync works
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as 🎧 Host phone
+    participant P as 📱 Joining phone
+    P->>H: Hello (protocol version, name)
+    H-->>P: Welcome (current song + shared timeline)
+    loop every second
+        P->>H: time request
+        H-->>P: time response → clock offset
+    end
+    H-->>P: Timeline {song, playing, start time on the host's clock, position}
+    Note over H,P: both fetch the same file and start at the same host time
+    loop every 100 ms
+        P->>P: compare what is playing with the timeline, nudge speed
+    end
+    P->>H: status (sync error, link, file)
+```
 
 1. **Shared timeline.** The host publishes `PlaybackState {seq, track, playing, anchorHostTime, anchorPosition}`
    on every change and once a second. Any phone can compute where the song *should* be at any instant,
    so lost messages, late joins and reconnects all heal by applying the latest state.
-2. **Clock offset.** Clients exchange timestamps with the host (16 at once on connect, then 1/s) and keep
+2. **Clock offset.** Phones exchange timestamps with the host (16 at once on connect, then 1/s) and keep
    the median offset of the fastest quarter of recent exchanges (the window widens on jittery links).
 3. **Scheduled actions.** Play/pause/seek take effect at a host time a few hundred ms ahead (based on the
    measured link latency). Each phone pauses, pre-positions, and calls `play()` early by its learned start
@@ -36,20 +92,35 @@ the track itself.
    timestamps, i.e. what is being heard) with the timeline: under 2.5 ms nothing happens, small errors
    adjust playback speed by up to ±0.5 %, larger ones by up to ±2 %, and beyond 150 ms it re-syncs.
 
+<p align="center">
+  <img src="docs/sync-loop.svg" alt="Illustration: phones that start tens of milliseconds apart are pulled into a 2.5 ms band within a few seconds" width="100%">
+</p>
+
 5. **Auto-calibrate echo.** Some delay happens after the audio leaves the app (speaker DSP, Bluetooth)
-   and phones often misreport it. On the host's request every phone plays a chirp track in sync, but each
-   phone is only audible in its own slot; the host's microphone records the run, a matched filter finds
-   each chirp's arrival to a fraction of a millisecond (first arrival, so reflections don't fool it). It
-   measures twice and corrects a phone only where both runs agree within 4 ms; the correction is saved per
-   speaker/headphones (at most ±120 ms for speakers and wired outputs). Timing corrections freeze while
-   chirps play. The recording stays in memory and is never stored or sent. The host menu can reset the
-   calibration on every phone; a manual fine-tune remains under Settings → Echo calibration (advanced).
+   and phones often misreport it. Every phone plays a chirp track in sync but is only audible in its own
+   slot; the host's microphone records the run and a matched filter finds each chirp's first arrival to a
+   fraction of a millisecond. It measures twice and corrects a phone only where both runs agree within
+   4 ms; the correction is saved per speaker/headphones (at most ±120 ms for speakers and wired outputs).
+   A manual fine-tune remains under Settings → Echo calibration (advanced).
 
-In the whole-stack simulation (random clock offsets of ±200 ms, ±50 ppm clock drift, 40–150 ms audio
-start latency, jittery network with spikes) every phone stays within **5 ms** of the timeline
-(observed 2.9–4.8 ms). Real-world numbers depend on the phones; the in-app diagnostics show them.
+<p align="center">
+  <img src="docs/calibration.svg" alt="Echo calibration: a 12 second lead-in, then each phone chirps four times in its own 2 second slot while the host records" width="100%">
+</p>
 
-## Building
+> In the whole-stack simulation (random clock offsets of ±200 ms, ±50 ppm clock drift, 40–150 ms audio
+> start latency, jittery network with spikes) every phone stays within **5 ms** of the timeline
+> (observed 2.5–4.5 ms). Real-world numbers depend on the phones; the in-app diagnostics show them.
+
+## 🚀 Using it
+
+1. Install the same APK on every phone and allow the permissions it asks for (Nearby devices, location,
+   notifications).
+2. On one phone tap **Host a group**, search JioSaavn or YouTube and play a song.
+3. On the others tap **Join a group** and pick the host. They start playing in sync within a second or two.
+4. For the tightest sync, put the phones near the host and tap ⋮ → **Auto-calibrate echo** once, then
+   ⋮ → **Check sync** to see the result.
+
+## 🛠️ Building
 
 Requirements: JDK 17+ (21 recommended), Android SDK with platform 37 (`compileSdk`; the app targets 36).
 
@@ -79,7 +150,7 @@ Without it, release builds are signed with the debug key so they still install l
 With a phone connected over adb: `./gradlew :app:generateReleaseBaselineProfile`, then commit the
 generated `app/src/release/generated/baselineProfiles/`. Makes the first launch smoother.
 
-## Tests
+## 🧪 Tests
 
 - `sync/` – clock sync, timeline, drift controller, and `SyncSimulationTest`, which runs a host and
   several clients with simulated clocks, audio hardware and network, asserting on what a listener would hear:
@@ -120,7 +191,18 @@ An outside check on **Check sync** that also shows slow drift over a whole song:
 Three runs should agree within about 0.5 ms. A spread that grows from 0:30 to 4:30 means drift is not being
 corrected (phone clocks differ by up to about 80 ppm, which is about 5 ms per minute uncorrected).
 
-## Project layout
+## 🗂️ Project layout
+
+```mermaid
+flowchart LR
+    UI["🖥️ ui<br/>Compose screens, ViewModel"] --> S["🧭 session<br/>hosting, joining, reconnect, calibration"]
+    S --> SY["⏱️ sync<br/>timeline, clock sync, drift control<br/>(pure Kotlin, simulated in tests)"]
+    S --> NET["📡 net<br/>protocol + Nearby Connections"]
+    S --> PB["🔊 playback<br/>ExoPlayer, audio routes, media service"]
+    S --> CAL["🎙️ calibration<br/>chirp track, mic, matched filter"]
+    S --> D["🎵 data<br/>JioSaavn, YouTube, settings"]
+    SY --> PB
+```
 
 ```
 app/src/main/java/com/songsync/app/
@@ -128,12 +210,13 @@ app/src/main/java/com/songsync/app/
   net/        Wire protocol (kotlinx.serialization), Transport interface, Nearby implementation
   sync/       Timeline, ClockSync, DriftController, PlaybackFollower, host/client coordinators (pure Kotlin)
   playback/   ExoPlayer engine, precise scheduler, audio routes + latency profiles, media session service
-  session/    SessionManager: discovery, hosting/joining, reconnect, recovery
+  session/    SessionManager: discovery, hosting/joining, reconnect, recovery, sync report
+  calibration/ Chirp track, microphone recorder, chirp detector and analyzer
   ui/         Compose screens and the ViewModel
 baselineprofile/  Baseline profile generator
 ```
 
-## Notes
+## 💡 Notes & troubleshooting
 
 - JioSaavn and YouTube are used through unofficial interfaces, which can change or break at any time;
   each source sits behind `MusicSource`. YouTube extraction is not allowed on Google Play, so distribute
@@ -149,7 +232,7 @@ baselineprofile/  Baseline profile generator
   `..._COARSE_LOCATION` (8034) without it (hosting is unaffected). The app never reads the location. Nearby
   errors shown in the app include the status code and a shortcut to the right settings screen.
 
-## License
+## 📄 License
 
 GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. Third-party notices are in
 `NOTICE`.
