@@ -16,6 +16,7 @@ change, run tests and lint before committing, bump the version for every APK the
 
 - **Status (2.3.0):** Phase 0 and 1 done, plus a one-tap "Run full sync test" report (host menu). Sim: worst 4.21 ms over 6 seeds, BT-like 6.7 ms. Waiting for the first real-phone report.
 - **Status (2.3.4):** field reports exposed bad echo calibrations (chirp aliasing, up to +300 ms) that every song then carried. Fixed in 2.3.2-2.3.4: unambiguous chirp pattern, ±120 ms cap on speaker/wired, two-run agreement before applying, measure-only sync test, host "Reset echo calibration (all phones)". Next: confirm on phones, then Phase 2.
+- **Status (2.3.8):** user reports sync "excellent" on real phones; released on GitHub. Also done: join-screen help (Bluetooth off/on tip after 30 s, discovery stops after 3 min) and a permanent release signing key. Phase 2 is deferred to the future by the user.
 - **Plan goal: ≤ 2 ms p95 on Wi-Fi with built-in speakers, ≤ 5 ms p95 worst case on Wi-Fi.** Bluetooth outputs are a separate, best-effort mode.
 - Floor: 2.9 ms per metre of path difference. Below about 1 ms, gains are audible only near the point where all phones are equidistant.
 - Today: the sim reports ≤ 4.4 ms steady state, but `SimulatedPlayer` gives an *unbiased* reported position (true + ±1.5 ms noise). Real-phone acoustic error is **unknown**, which is why Phase 0 comes first.
@@ -123,7 +124,7 @@ change, run tests and lint before committing, bump the version for every APK the
   - Effort: S
 
 - [x] **1.6 Bluetooth route = separate, honest mode**
-  - What: when `AudioRouteMonitor.route.type == BLUETOOTH`, show a "Bluetooth output: sync is approximate, run echo calibration" chip in the sync UI and on the host's device list (send the route type in `ClientStatus`). Prompt to re-calibrate when the route changes; this is already a handover idea. (2.3.0: device-list mark and player hint done; an automatic prompt on route change is not.)
+  - What: when `AudioRouteMonitor.route.type == BLUETOOTH`, show a "Bluetooth output: sync is approximate, run echo calibration" chip in the sync UI and on the host's device list (send the route type in `ClientStatus`). Prompt to re-calibrate when the route changes; this is already a handover idea. (2.3.0: device-list mark and player hint done; 2.3.8: prompt when the output changes to an uncalibrated Bluetooth device.)
   - Files: `playback/AudioRouteMonitor.kt`, `net/Protocol.kt`, `ui/session/HostScreen.kt`, `ui/components/Components.kt`.
   - Why: A2DP adds 100–300 ms, and delay reports are only as good as the headset's AVDTP report (R §[ExoPlayer hides the timestamps](reports/Android%20multi%20phone%20audio%20sync.md#exoplayer-hides-the-timestamps-that-sample-accurate-sync-needs)).
   - Verify: `ProtocolTest` covers the new field. Phone test: connect BT earbuds and check that the chip appears and the host sees it.
