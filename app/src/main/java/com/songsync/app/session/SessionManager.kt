@@ -48,6 +48,9 @@ import com.songsync.app.sync.SyncEvent
 import com.songsync.app.sync.SyncConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -354,6 +357,7 @@ class SessionManager(
                 }
             }
             try {
+                transport.stopAll() // clear Nearby state left by an earlier session or app version
                 transport.startAdvertising(EndpointInfo(deviceName, sessionId))
             } catch (e: CancellationException) {
                 throw e
@@ -661,6 +665,7 @@ class SessionManager(
                 }
             }
             try {
+                transport.stopAll() // clear Nearby state left by an earlier session or app version
                 transport.startDiscovery()
             } catch (e: CancellationException) {
                 throw e
@@ -690,17 +695,60 @@ class SessionManager(
         transport.stopDiscovery() // discovering while connecting makes Nearby much less reliable
         _state.value = State.Connecting(host)
         startForegroundService()
-        scope.launch {
+        // Tracked as the discovery job so leaving or cancelling stops the attempts too.
+        discoveryJob = scope.launch {
             deviceName = settings.deviceName.first()
-            try {
-                transport.connect(host.endpointId, deviceName)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                reportNearbyError(e)
-                backToDiscovery()
-            }
+            connectWithRetries(host)
         }
+    }
+
+    /**
+     * Nearby connections often fail on the first try (an I/O error while the radios negotiate),
+     * and a request can also go unanswered. Each attempt waits [CONNECT_ATTEMPT_TIMEOUT_MS]; after
+     * [CONNECT_ATTEMPTS] failures the user is told and discovery restarts. A success is handled by
+     * [onTransportEvent] (Connected -> onJoined).
+     */
+    private suspend fun connectWithRetries(host: DiscoveredHost) {
+        var lastException: Exception? = null
+        for (attempt in 1..CONNECT_ATTEMPTS) {
+            if (attempt > 1) {
+                transport.disconnect(host.endpointId) // drop a half-open attempt (or a stale link)
+                delay(CONNECT_RETRY_DELAY_MS)
+            }
+            if (_state.value !is State.Connecting) return
+            lastException = null
+            val outcome = coroutineScope {
+                // Subscribed before the request so the result cannot be missed.
+                val result = async(start = CoroutineStart.UNDISPATCHED) {
+                    transport.events.first {
+                        (it is TransportEvent.Connected || it is TransportEvent.ConnectionFailed) && it.endpointId == host.endpointId
+                    }
+                }
+                try {
+                    transport.connect(host.endpointId, deviceName)
+                    withTimeoutOrNull(CONNECT_ATTEMPT_TIMEOUT_MS) { result.await() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastException = e
+                    null
+                } finally {
+                    result.cancel()
+                }
+            }
+            if (outcome is TransportEvent.Connected) return
+            val why = when {
+                outcome is TransportEvent.ConnectionFailed -> ConnectionsStatusCodes.getStatusCodeString(outcome.statusCode)
+                lastException != null -> (lastException as? ApiException)?.let { ConnectionsStatusCodes.getStatusCodeString(it.statusCode) }
+                    ?: lastException?.javaClass?.simpleName
+                else -> "no answer in ${CONNECT_ATTEMPT_TIMEOUT_MS / 1_000} s"
+            }
+            log("connect to ${host.name}: attempt $attempt failed ($why)")
+            if ((lastException as? ApiException)?.statusCode in NON_RETRYABLE_NEARBY_CODES) break
+        }
+        if (_state.value !is State.Connecting) return
+        lastException?.let(::reportNearbyError) ?: report(R.string.error_connect_failed, host.name)
+        backToDiscovery()
     }
 
     // --- both --------------------------------------------------------------------------------
@@ -933,13 +981,9 @@ class SessionManager(
     private fun onTransportEvent(event: TransportEvent) {
         if (event is TransportEvent.BandwidthChanged) log("link quality ${event.quality} (1 = Bluetooth, 3 = fast Wi-Fi)")
         when (val state = _state.value) {
-            is State.Connecting -> when {
-                event is TransportEvent.Connected && event.endpointId == state.host.endpointId -> onJoined(state.host)
-                event is TransportEvent.ConnectionFailed && event.endpointId == state.host.endpointId -> {
-                    report(R.string.error_connect_failed, state.host.name)
-                    backToDiscovery()
-                }
-            }
+            // Failures while connecting are retried by connectWithRetries().
+            is State.Connecting ->
+                if (event is TransportEvent.Connected && event.endpointId == state.host.endpointId) onJoined(state.host)
             is State.Reconnecting ->
                 if (event is TransportEvent.Connected && event.endpointId == reconnectTarget) {
                     onJoined(state.host.copy(endpointId = event.endpointId))
@@ -1102,6 +1146,24 @@ class SessionManager(
         const val STATS_INTERVAL_MS = 500L
         const val RECONNECT_TIMEOUT_MS = 60_000L
         const val CONNECT_ATTEMPT_TIMEOUT_MS = 10_000L
+        const val CONNECT_ATTEMPTS = 3
+        const val CONNECT_RETRY_DELAY_MS = 1_500L
+        /** Failures a retry cannot fix: the user has to change a setting or close another app. */
+        @Suppress("DEPRECATION")
+        val NON_RETRYABLE_NEARBY_CODES = setOf(
+            ConnectionsStatusCodes.MISSING_SETTING_LOCATION_MUST_BE_ON,
+            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_COARSE_LOCATION,
+            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_FINE_LOCATION,
+            ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH,
+            ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_ADMIN,
+            ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_SCAN,
+            ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_ADVERTISE,
+            ConnectionsStatusCodes.MISSING_PERMISSION_BLUETOOTH_CONNECT,
+            ConnectionsStatusCodes.MISSING_PERMISSION_NEARBY_WIFI_DEVICES,
+            ConnectionsStatusCodes.MISSING_PERMISSION_ACCESS_WIFI_STATE,
+            ConnectionsStatusCodes.MISSING_PERMISSION_CHANGE_WIFI_STATE,
+            ConnectionsStatusCodes.API_CONNECTION_FAILED_ALREADY_IN_USE,
+        )
         const val RECONNECT_RETRY_DELAY_MS = 2_000L
         const val MAX_RECOVERY_ATTEMPTS = 3
         const val RECOVERY_BASE_DELAY_MS = 2_000L
