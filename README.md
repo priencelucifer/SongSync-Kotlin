@@ -75,7 +75,7 @@ sequenceDiagram
     H-->>P: Timeline {song, playing, start time on the host's clock, position}
     Note over H,P: both fetch the same file and start at the same host time
     loop every 100 ms
-        P->>P: compare what is playing with the timeline, nudge speed
+        Note right of P: check against timeline,<br/>nudge speed
     end
     P->>H: status (sync error, link, file)
 ```
