@@ -17,6 +17,10 @@
 </p>
 
 <p align="center">
+  <sub>A hard fork of <a href="https://github.com/SirEthic/SongSync">SirEthic/SongSync</a> (Flutter), rewritten natively in Kotlin.</sub>
+</p>
+
+<p align="center">
   <a href="https://github.com/priencelucifer/SongSync-Kotlin/releases/latest">
     <img alt="Download the APK" src="https://img.shields.io/badge/Download-APK-5B3FD9?style=for-the-badge&logo=android&logoColor=white">
   </a>
@@ -242,5 +246,6 @@ baselineprofile/  Baseline profile generator
 
 ## 📄 License
 
-GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. Third-party notices are in
+GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. SongSync is a hard fork of
+[SirEthic/SongSync](https://github.com/SirEthic/SongSync) (MIT); its notice and the third-party notices are in
 `NOTICE`.
