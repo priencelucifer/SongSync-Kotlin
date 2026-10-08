@@ -16,6 +16,12 @@
   One phone hosts and picks the music, the others join, and every phone plays the same song at the same moment.
 </p>
 
+<p align="center">
+  <a href="https://github.com/priencelucifer/SongSync-Kotlin/releases/latest">
+    <img alt="Download the APK" src="https://img.shields.io/badge/Download-APK-5B3FD9?style=for-the-badge&logo=android&logoColor=white">
+  </a>
+</p>
+
 ---
 
 ## ✨ Features
@@ -113,8 +119,10 @@ sequenceDiagram
 
 ## 🚀 Using it
 
-1. Install the same APK on every phone and allow the permissions it asks for (Nearby devices, location,
-   notifications).
+1. Download the APK from the [latest release](https://github.com/priencelucifer/SongSync-Kotlin/releases/latest)
+   and install it on every phone (allow "install unknown apps" for your browser or file manager when asked).
+   Open it once and allow the permissions it asks for (Nearby devices, location, notifications).
+   Every phone in a group needs the same version.
 2. On one phone tap **Host a group**, search JioSaavn or YouTube and play a song.
 3. On the others tap **Join a group** and pick the host. They start playing in sync within a second or two.
 4. For the tightest sync, put the phones near the host and tap ⋮ → **Auto-calibrate echo** once, then
