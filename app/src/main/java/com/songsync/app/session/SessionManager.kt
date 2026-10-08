@@ -250,7 +250,14 @@ class SessionManager(
         engine.onStateChanged = { follower.onPlayerChanged() }
         follower.onEvent = { event -> log(describe(event)) }
         follower.learnsFromTrack = { !CalibrationSignal.isCalibrationKey(it) }
-        scope.launch { routes.route.collect { latency.switchTo(it) } }
+        scope.launch {
+            var previous: AudioRoute? = null
+            routes.route.collect { route ->
+                latency.switchTo(route)
+                if (previous != null && route.key != previous?.key) promptCalibrationFor(route)
+                previous = route
+            }
+        }
         scope.launch {
             onHold.collect { hold ->
                 follower.setHold(hold)
@@ -951,6 +958,19 @@ class SessionManager(
             rttMinMs = estimate?.let { it.minRttNs.toDouble() / NANOS_PER_MS },
             rttMedianMs = estimate?.let { it.medianRttNs.toDouble() / NANOS_PER_MS },
         )
+    }
+
+    /**
+     * A phone switched to a Bluetooth output mid-session that was never calibrated: it now plays
+     * 100-300 ms late, which only echo calibration can measure. A route that was calibrated before
+     * gets its saved correction back automatically, so it needs no prompt.
+     */
+    private fun promptCalibrationFor(route: AudioRoute) {
+        val state = _state.value
+        val inSession = state is State.Hosting || state is State.Joined || state is State.Reconnecting
+        if (!inSession || route.type != AudioRoute.Type.BLUETOOTH || latency.calibrationMs != 0.0) return
+        log("output changed to ${route.name}: not calibrated yet")
+        report(if (state is State.Hosting) R.string.calibration_prompt_host else R.string.calibration_prompt_client, route.name)
     }
 
     /**

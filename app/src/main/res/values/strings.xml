@@ -148,6 +148,8 @@
     <string name="calibration_failed_changed">A phone joined, left or paused during calibration. Try again.</string>
     <string name="calibration_reset_everywhere_button">Reset echo calibration (all phones)</string>
     <string name="calibration_reset_everywhere">Echo calibration reset on every phone. They now play uncorrected.</string>
+    <string name="calibration_prompt_host">Now playing through %1$s. Bluetooth adds delay: tap ⋮ → Auto-calibrate echo to line it up with the others.</string>
+    <string name="calibration_prompt_client">Now playing through %1$s. Bluetooth adds delay: ask the host to run Auto-calibrate echo.</string>
     <string name="calibration_reset_by_host">The host reset echo calibration. This phone now plays uncorrected.</string>
     <string name="sync_check_button">Check sync</string>
     <string name="sync_report_button">Run full sync test</string>
