@@ -92,8 +92,11 @@ class SyncPlaybackService : Service() {
             ACTION_NEXT -> manager.skipNext()
             ACTION_LEAVE -> manager.leave()
         }
-        // E.g. a stale notification button after the session ended: don't linger.
-        if (manager.state.value == SessionManager.State.Idle) stopSelf()
+        // A stale notification button after the session ended: don't linger. Only for button
+        // taps: the plain start comes from "Host"/"Join" before the session leaves Idle (its setup
+        // runs in a coroutine), and stopping then left every host without this service, so without
+        // its Wi-Fi lock and free to be frozen in the background. Leaving stops the service.
+        if (intent?.action != null && manager.state.value == SessionManager.State.Idle) stopSelf()
         return START_NOT_STICKY
     }
 
