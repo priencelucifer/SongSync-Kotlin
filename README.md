@@ -5,7 +5,7 @@ system. One phone hosts a group and picks music from JioSaavn or YouTube; nearby
 Google Nearby Connections (Bluetooth / Wi-Fi, no shared network needed) and every phone streams
 the track itself.
 
-This is a native Kotlin rewrite of the Flutter app [SirEthic/SongSync](https://github.com/SirEthic/SongSync).
+This is a native Kotlin rewrite of an earlier Flutter version of SongSync.
 
 ## What changed compared with the Flutter app
 
@@ -140,6 +140,9 @@ baselineprofile/  Baseline profile generator
 - Bluetooth speakers and headphones add latency that phones report inconsistently; that is what the
   per-output calibration is for.
 - Nearby works best when it can use Wi-Fi; on Bluetooth-only links the clock estimate is noisier.
+- If a phone does not see a group, turn its Bluetooth off and on and search again. Android 8 throttles
+  Bluetooth scanning once Play services has scanned for a long time (`dumpsys bluetooth_manager` then shows
+  its scanner as "Forced-Opportunistic" with 0 results); toggling Bluetooth resets it.
 - The app asks for precise location on every Android version: Google's documentation says it is not needed
   on Android 13+, but Play services' discovery fails with `MISSING_PERMISSION_ACCESS_FINE_LOCATION` (8036) /
   `..._COARSE_LOCATION` (8034) without it (hosting is unaffected). The app never reads the location. Nearby
@@ -148,4 +151,4 @@ baselineprofile/  Baseline profile generator
 ## License
 
 GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. The original Flutter app is
-MIT-licensed by SirEthic; its notice is reproduced in `NOTICE` together with third-party credits.
+MIT-licensed; its notice is reproduced in `NOTICE` together with third-party credits.
