@@ -249,3 +249,9 @@ baselineprofile/  Baseline profile generator
 GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. SongSync is a hard fork of
 [SirEthic/SongSync](https://github.com/SirEthic/SongSync) (MIT); its notice and the third-party notices are in
 `NOTICE`.
+
+## 🙏 Thanks
+
+A big thank you to [SirEthic](https://github.com/SirEthic) for creating the original
+[SongSync](https://github.com/SirEthic/SongSync) and sharing it. The idea and the first version came from
+there, and this project wouldn't exist without it.
