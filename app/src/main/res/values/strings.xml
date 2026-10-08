@@ -65,6 +65,12 @@
     <string name="join_hint">Ask the host to tap “Host a group”. Keep Bluetooth and Wi-Fi on.</string>
     <string name="join_connecting">Connecting to %1$s…</string>
     <string name="join_tap">Tap to join</string>
+    <string name="join_slow_title">No groups found yet</string>
+    <string name="join_slow_hint">Check that the host tapped “Host a group” and is close by. Still nothing? On this phone, turn Bluetooth off and back on, then tap Search again: some phones stop hearing nearby devices after scanning for a long time.</string>
+    <string name="join_stopped_title">Stopped searching</string>
+    <string name="join_stopped_hint">The search pauses after a few minutes so it doesn\'t drain the battery or tire out Bluetooth. Ask the host to tap “Host a group”, then search again.</string>
+    <string name="join_search_again">Search again</string>
+    <string name="join_bluetooth_settings">Bluetooth settings</string>
 
     <!-- Host -->
     <string name="host_title">Your group</string>

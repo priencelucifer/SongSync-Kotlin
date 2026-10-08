@@ -109,6 +109,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startDiscovery() = session.startDiscovery()
     fun stopDiscovery() = session.stopDiscovery()
+    fun searchAgain() = session.searchAgain()
     fun join(host: DiscoveredHost) = session.join(host)
     fun leave() = session.leave()
 

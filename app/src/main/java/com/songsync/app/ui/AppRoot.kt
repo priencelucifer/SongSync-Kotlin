@@ -113,7 +113,7 @@ fun AppRoot(vm: AppViewModel) {
                     onJoin = { gate.run(vm::startDiscovery) },
                     onSettings = { showSettings = true },
                 )
-                Route.JOIN -> JoinScreen(state, onJoin = vm::join, onBack = vm::stopDiscovery)
+                Route.JOIN -> JoinScreen(state, onJoin = vm::join, onSearchAgain = vm::searchAgain, onBack = vm::stopDiscovery)
                 Route.HOST -> HostScreen(
                     vm = vm,
                     onOpenPlayer = { playerExpanded = true },

@@ -189,12 +189,18 @@ class SessionManager(
 
     sealed interface State {
         data object Idle : State
-        data class Discovering(val hosts: List<DiscoveredHost>) : State
+        data class Discovering(val hosts: List<DiscoveredHost>, val search: Search = Search.SEARCHING) : State
         data class Connecting(val host: DiscoveredHost) : State
         data class Hosting(val sessionId: String, val name: String) : State
         data class Joined(val host: DiscoveredHost) : State
         data class Reconnecting(val host: DiscoveredHost) : State
     }
+
+    /**
+     * Where the search for hosts stands. [SLOW]: nothing found for a while, so the screen offers
+     * the fixes that worked in the field. [STOPPED]: scanning ended on its own (see [runDiscovery]).
+     */
+    enum class Search { SEARCHING, SLOW, STOPPED }
 
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
@@ -657,11 +663,42 @@ class SessionManager(
     fun startDiscovery() {
         if (_state.value != State.Idle) return
         _state.value = State.Discovering(emptyList())
+        runDiscovery()
+    }
+
+    /** Join screen: scan again, e.g. after toggling Bluetooth or after the search stopped by itself. */
+    fun searchAgain() {
+        if (_state.value !is State.Discovering) return
+        _state.value = State.Discovering(emptyList())
+        runDiscovery()
+    }
+
+    /**
+     * Scans for hosts. Scanning stops by itself after [DISCOVERY_TIMEOUT_MS]: on Android 8 a scan
+     * running for long gets Play services' Bluetooth scanner throttled to "opportunistic" (it then
+     * hears nothing, until Bluetooth is toggled), so a join screen left open must not keep it busy.
+     */
+    private fun runDiscovery() {
+        discoveryJob?.cancel()
         discoveryJob = scope.launch {
             teardownJob?.join()
             launch {
                 transport.hosts.collect { hosts ->
-                    if (_state.value is State.Discovering) _state.value = State.Discovering(hosts.values.sortedBy { it.name })
+                    val current = _state.value as? State.Discovering ?: return@collect
+                    if (current.search != Search.STOPPED) _state.value = current.copy(hosts = hosts.values.sortedBy { it.name })
+                }
+            }
+            launch {
+                delay(NOTHING_FOUND_HINT_MS)
+                val current = _state.value as? State.Discovering ?: return@launch
+                if (current.hosts.isEmpty() && current.search == Search.SEARCHING) _state.value = current.copy(search = Search.SLOW)
+            }
+            launch {
+                delay(DISCOVERY_TIMEOUT_MS)
+                if (_state.value is State.Discovering) {
+                    transport.stopAll()
+                    _state.value = State.Discovering(emptyList(), Search.STOPPED)
+                    log("search stopped after ${DISCOVERY_TIMEOUT_MS / 60_000} min")
                 }
             }
             try {
@@ -1146,6 +1183,8 @@ class SessionManager(
         const val STATS_INTERVAL_MS = 500L
         const val RECONNECT_TIMEOUT_MS = 60_000L
         const val CONNECT_ATTEMPT_TIMEOUT_MS = 10_000L
+        const val NOTHING_FOUND_HINT_MS = 30_000L
+        const val DISCOVERY_TIMEOUT_MS = 3 * 60_000L
         const val CONNECT_ATTEMPTS = 3
         const val CONNECT_RETRY_DELAY_MS = 1_500L
         /** Failures a retry cannot fix: the user has to change a setting or close another app. */
