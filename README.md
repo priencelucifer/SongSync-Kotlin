@@ -1,26 +1,26 @@
-# SongSync (Kotlin)
+# SongSync
 
 Play the same song on several Android phones at once, in sync, so they sound like one speaker
 system. One phone hosts a group and picks music from JioSaavn or YouTube; nearby phones join over
 Google Nearby Connections (Bluetooth / Wi-Fi, no shared network needed) and every phone streams
 the track itself.
 
-This is a native Kotlin rewrite of an earlier Flutter version of SongSync.
+## Features
 
-## What changed compared with the Flutter app
-
-| Problem in the original | What the rewrite does |
-|---|---|
-| Sync used relative `Future.delayed` timers on the UI thread and RTT/2 averaged over 5 pings with the wall clock | NTP-style clock-offset estimation on the monotonic clock, filtered to the fastest round trips |
-| No drift correction once playing; a rebuffer meant permanent echo | Closed loop every 100 ms: tiny speed nudges for small drift, re-sync for large drift |
-| Device start latency only fixable by a manual slider that wasn't saved | Start latency is learned per phone and per audio output; the remaining speaker/Bluetooth delay is measured acoustically by **Auto-calibrate echo** |
-| UI jank: whole screen rebuilt on every ping, hidden player rebuilt constantly and crashing on null, seek on every drag tick | Compose with isolated position polling (4 Hz, only where shown), seek on release |
-| Only one client; host stopped advertising after the first join; auto-joined the first host seen | Any number of phones, pick-a-host list, phones can join or rejoin at any time |
-| No reconnect | Clients keep playing on the last known timeline and reconnect automatically for 60 s |
-| Stopped in the background | Foreground media session service: screen off, lock-screen controls, headset buttons |
-| YouTube stream URLs (tied to the host's IP) were shared with clients | Each phone resolves the track itself; the host shares only IDs |
-| Always requested JioSaavn 320 kbps, which 404s for some songs | Verified 320 → 160 → 96 kbps fallback; host picks, every phone fetches the same file |
-| Nearby default connection type could move phones onto a hotspot, cutting their internet | `NON_DISRUPTIVE` connections keep every phone on its own network |
+- **Any number of phones.** Host a group, others pick it from a list and can join or rejoin at any time,
+  also mid-song.
+- **Tight sync.** Phones share one timeline and an NTP-style clock estimate; a closed loop nudges playback
+  speed every 100 ms so phones stay within a few milliseconds, without audible jumps.
+- **Echo calibration.** The host's microphone measures each phone's real speaker or Bluetooth delay
+  (**Auto-calibrate echo**) and corrects it, per phone and per audio output.
+- **Sync check and full sync test.** Measure how far apart the phones really sound, and get a one-screen
+  report (devices, clocks, links, files) to share.
+- **Same file everywhere.** The host picks the stream (JioSaavn bitrate with 320 → 160 → 96 kbps fallback,
+  YouTube format), every phone fetches that exact file itself; only IDs are shared.
+- **Keeps playing.** Screen off, lock-screen and headset controls, phone calls; if the link drops, phones
+  keep playing and reconnect automatically for 60 s.
+- **Stays online.** Nearby connections never move phones onto a hotspot, so every phone keeps its internet.
+- **Queue and search** for JioSaavn and YouTube, with a per-phone "pause here" that leaves the group playing.
 
 ## How sync works
 
@@ -33,16 +33,17 @@ This is a native Kotlin rewrite of an earlier Flutter version of SongSync.
    measured link latency). Each phone pauses, pre-positions, and calls `play()` early by its learned start
    latency so audio comes out on time; pauses happen on the same sample everywhere.
 4. **Closed loop.** While playing, each phone compares ExoPlayer's position (derived from AudioTrack
-   timestamps, i.e. what is being heard) with the timeline: under 4 ms nothing happens, up to 120 ms it
-   adjusts playback speed by up to ±2 %, beyond that it re-syncs.
+   timestamps, i.e. what is being heard) with the timeline: under 2.5 ms nothing happens, small errors
+   adjust playback speed by up to ±0.5 %, larger ones by up to ±2 %, and beyond 150 ms it re-syncs.
 
 5. **Auto-calibrate echo.** Some delay happens after the audio leaves the app (speaker DSP, Bluetooth)
    and phones often misreport it. On the host's request every phone plays a chirp track in sync, but each
    phone is only audible in its own slot; the host's microphone records the run, a matched filter finds
-   each chirp's arrival to a fraction of a millisecond (first arrival, so reflections don't fool it), and
-   each phone's measured lateness becomes its correction, saved per speaker/headphones. Timing corrections
-   freeze while chirps play. The recording stays in memory for ~15 s and is never stored or sent. A manual
-   fine-tune remains under Settings → Echo calibration (advanced).
+   each chirp's arrival to a fraction of a millisecond (first arrival, so reflections don't fool it). It
+   measures twice and corrects a phone only where both runs agree within 4 ms; the correction is saved per
+   speaker/headphones (at most ±120 ms for speakers and wired outputs). Timing corrections freeze while
+   chirps play. The recording stays in memory and is never stored or sent. The host menu can reset the
+   calibration on every phone; a manual fine-tune remains under Settings → Echo calibration (advanced).
 
 In the whole-stack simulation (random clock offsets of ±200 ms, ±50 ppm clock drift, 40–150 ms audio
 start latency, jittery network with spikes) every phone stays within **5 ms** of the timeline
@@ -150,5 +151,5 @@ baselineprofile/  Baseline profile generator
 
 ## License
 
-GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. The original Flutter app is
-MIT-licensed; its notice is reproduced in `NOTICE` together with third-party credits.
+GPL-3.0-or-later (see `LICENSE`), because the app includes NewPipe Extractor. Third-party notices are in
+`NOTICE`.
